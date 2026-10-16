@@ -1,0 +1,28 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-status-datatable-page
+  type: datatablePage
+  config:
+    autoReload: 5000
+    hasSearchField: false
+    selectionType: none
+    limit: 0
+    stateId: db008a05-7011-44cc-9c3c-ae5c67193aa5
+    store:
+      proxy:
+        service: Qnap
+        get:
+          method: getStatus
+    columns:
+      - name: _("Type")
+        prop: type
+        flexGrow: 1
+      - name: _("Sensor")
+        prop: label
+        flexGrow: 2
+      - name: _("Value")
+        prop: value
+        flexGrow: 1
+        cellTemplateName: template
+        cellTemplateConfig: "{{ value }} {{ unit }}"

@@ -1,0 +1,62 @@
+#!/bin/sh
+#
+# This file is part of openmediavault-qnap.
+#
+# openmediavault-qnap is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# openmediavault-qnap is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with openmediavault-qnap. If not, see <http://www.gnu.org/licenses/>.
+
+set -e
+
+OMV_AVAILABLE=false
+if [ -f /etc/default/openmediavault ] && [ -f /usr/share/openmediavault/scripts/helper-functions ]; then
+    . /etc/default/openmediavault
+    . /usr/share/openmediavault/scripts/helper-functions
+    OMV_AVAILABLE=true
+fi
+
+case "$1" in
+    purge)
+        if [ "${OMV_AVAILABLE}" = "true" ]; then
+            dpkg-trigger update-workbench
+            # omv-confdbadm cannot be used here, the datamodel is gone.
+            omv_config_delete "/config/services/qnap"
+        fi
+        rm -rf /etc/qnapd
+        rm -f /etc/modules-load.d/openmediavault-qnap.conf \
+            /etc/modprobe.d/openmediavault-qnap.conf
+        if [ -f /etc/default/grub.d/openmediavault-qnap.cfg ]; then
+            rm -f /etc/default/grub.d/openmediavault-qnap.cfg
+            if command -v update-grub >/dev/null 2>&1; then
+                update-grub || :
+            fi
+        fi
+    ;;
+
+    remove)
+        if [ "${OMV_AVAILABLE}" = "true" ]; then
+            dpkg-trigger update-workbench
+        fi
+    ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+
+    *)
+        echo "postrm called with unknown argument '$1'" >&2
+        exit 1
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

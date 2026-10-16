@@ -1,0 +1,21 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: b8d2e95b-2403-47d2-b795-3887b3f4ad96
+  type: grid
+  reloadPeriod: 10000
+  permissions:
+    role:
+      - admin
+  title: _("QNAP fans & temperatures")
+  description: _("Displays the QNAP fan speeds and temperatures.")
+  grid:
+    item:
+      content: '{{ label }}<br>{{ value }} {{ unit }}'
+      class: 'omv-text-center omv-text-nowrap omv-background-color-muted'
+      tooltip: '{{ name }}'
+    store:
+      proxy:
+        service: Qnap
+        get:
+          method: getStatus

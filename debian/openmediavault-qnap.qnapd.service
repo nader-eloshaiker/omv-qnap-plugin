@@ -1,0 +1,22 @@
+[Unit]
+Description=QNAP fan and front panel daemon (openmediavault-qnap)
+Documentation=https://github.com/nader-eloshaiker/omv-qnap-plugin
+After=systemd-modules-load.service
+ConditionPathExists=/etc/qnapd/qnapd.json
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/qnapd run
+# Runs after a clean stop *and* after a crash: never leave fans slow.
+ExecStopPost=/usr/sbin/qnapd failsafe
+Restart=always
+RestartSec=10
+RuntimeDirectory=qnapd
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

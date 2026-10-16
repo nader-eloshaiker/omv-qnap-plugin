@@ -1,0 +1,293 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-fan-form-page
+  type: formPage
+  config:
+    request:
+      service: Qnap
+      get:
+        method: getSettings
+      post:
+        method: setFanSettings
+    hints:
+      - type: info
+        text: _("Requires the qnap8528 kernel driver. When the service stops or fails, the fans are set to full speed.")
+    fields:
+      - type: checkbox
+        name: enable
+        label: _("Enable")
+        value: false
+      - type: select
+        name: fanmode
+        label: _("Fan mode")
+        value: normal
+        store:
+          data:
+            - ["quiet", _("Quiet")]
+            - ["normal", _("Normal")]
+            - ["performance", _("Performance")]
+            - ["custom", _("Custom curve")]
+            - ["manual", _("Manual (fixed speed)")]
+        hint: _("Quiet, Normal and Performance use built-in temperature curves. Critical temperatures always force full speed.")
+      - type: numberInput
+        name: interval
+        label: _("Check interval")
+        value: 10
+        hint: _("Seconds between fan adjustments.")
+        validators:
+          min: 2
+          max: 120
+          patternType: integer
+          required: true
+      - type: numberInput
+        name: manualpwm
+        label: _("Fixed fan speed (PWM 0-255)")
+        value: 160
+        validators:
+          min: 0
+          max: 255
+          patternType: integer
+          required: true
+        modifiers:
+          - type: visible
+            constraint:
+              operator: eq
+              arg0:
+                prop: fanmode
+              arg1: manual
+      - type: divider
+        title: _("Temperature sources")
+      - type: checkbox
+        name: usecpu
+        label: _("CPU (coretemp / k10temp)")
+        value: true
+      - type: checkbox
+        name: usesystem
+        label: _("System (embedded controller sensors)")
+        value: true
+      - type: checkbox
+        name: usedisk
+        label: _("Hard disks (S.M.A.R.T., disks in standby are not woken)")
+        value: true
+      - type: numberInput
+        name: diskinterval
+        label: _("Disk polling interval")
+        value: 60
+        hint: _("Seconds between S.M.A.R.T. temperature reads.")
+        validators:
+          min: 10
+          max: 3600
+          patternType: integer
+          required: true
+        modifiers:
+          - type: visible
+            constraint:
+              operator: truthy
+              arg0:
+                prop: usedisk
+      - type: checkbox
+        name: usenvme
+        label: _("NVMe SSDs")
+        value: true
+      - type: divider
+        title: _("Custom curve")
+        modifiers:
+          - type: visible
+            constraint:
+              operator: eq
+              arg0:
+                prop: fanmode
+              arg1: custom
+      - type: container
+        fields:
+          - type: numberInput
+            name: minpwm
+            label: _("Minimum fan speed (PWM)")
+            value: 64
+            validators:
+              min: 0
+              max: 255
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: maxpwm
+            label: _("Maximum fan speed (PWM)")
+            value: 255
+            validators:
+              min: 0
+              max: 255
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: hysteresis
+            label: _("Hysteresis (°C)")
+            value: 3
+            validators:
+              min: 0
+              max: 15
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+      - type: container
+        fields:
+          - type: numberInput
+            name: cpulow
+            label: _("CPU ramp-up temperature (°C)")
+            value: 45
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: cpuhigh
+            label: _("CPU full-speed temperature (°C)")
+            value: 80
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+      - type: container
+        fields:
+          - type: numberInput
+            name: syslow
+            label: _("System ramp-up temperature (°C)")
+            value: 30
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: syshigh
+            label: _("System full-speed temperature (°C)")
+            value: 45
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+      - type: container
+        fields:
+          - type: numberInput
+            name: disklow
+            label: _("Disk ramp-up temperature (°C)")
+            value: 38
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: diskhigh
+            label: _("Disk full-speed temperature (°C)")
+            value: 48
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+      - type: container
+        fields:
+          - type: numberInput
+            name: nvmelow
+            label: _("NVMe ramp-up temperature (°C)")
+            value: 45
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+          - type: numberInput
+            name: nvmehigh
+            label: _("NVMe full-speed temperature (°C)")
+            value: 65
+            validators:
+              min: 0
+              max: 110
+              patternType: integer
+              required: true
+            modifiers:
+              - type: visible
+                constraint:
+                  operator: eq
+                  arg0:
+                    prop: fanmode
+                  arg1: custom
+    buttons:
+      - template: submit
+      - template: cancel
+        execute:
+          type: url
+          url: "/system/qnap"

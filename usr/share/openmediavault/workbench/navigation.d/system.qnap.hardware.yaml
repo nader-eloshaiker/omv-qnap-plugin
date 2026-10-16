@@ -1,0 +1,8 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "system.qnap.hardware"
+  text: _("Hardware")
+  position: 30
+  icon: "mdi:led-on"
+  url: "/system/qnap/hardware"

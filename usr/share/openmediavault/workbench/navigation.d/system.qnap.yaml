@@ -1,0 +1,7 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "system.qnap"
+  text: _("QNAP")
+  icon: "mdi:fan"
+  url: "/system/qnap"

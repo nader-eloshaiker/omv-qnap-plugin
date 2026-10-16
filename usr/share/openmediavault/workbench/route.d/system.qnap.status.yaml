@@ -1,0 +1,6 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/status"
+  title: _("Status")
+  component: omv-system-qnap-status-datatable-page

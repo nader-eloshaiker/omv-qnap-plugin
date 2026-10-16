@@ -1,0 +1,47 @@
+[
+	{
+		"type": "rpc",
+		"id": "rpc.qnap.setfansettings",
+		"params": {
+			"type": "object",
+			"properties": {
+				"enable": { "type": "boolean", "required": true },
+				"interval": { "type": "integer", "minimum": 2, "maximum": 120, "required": true },
+				"fanmode": { "type": "string", "enum": ["quiet", "normal", "performance", "custom", "manual"], "required": true },
+				"manualpwm": { "type": "integer", "minimum": 0, "maximum": 255, "required": true },
+				"minpwm": { "type": "integer", "minimum": 0, "maximum": 255, "required": true },
+				"maxpwm": { "type": "integer", "minimum": 0, "maximum": 255, "required": true },
+				"hysteresis": { "type": "integer", "minimum": 0, "maximum": 15, "required": true },
+				"usecpu": { "type": "boolean", "required": true },
+				"cpulow": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"cpuhigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"usesystem": { "type": "boolean", "required": true },
+				"syslow": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"syshigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"usedisk": { "type": "boolean", "required": true },
+				"disklow": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"diskhigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"diskinterval": { "type": "integer", "minimum": 10, "maximum": 3600, "required": true },
+				"usenvme": { "type": "boolean", "required": true },
+				"nvmelow": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"nvmehigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true }
+			}
+		}
+	},
+	{
+		"type": "rpc",
+		"id": "rpc.qnap.sethardwaresettings",
+		"params": {
+			"type": "object",
+			"properties": {
+				"ledstatus": { "type": "boolean", "required": true },
+				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true },
+				"powerrecovery": { "type": "string", "enum": ["unchanged", "off", "on", "last"], "required": true },
+				"eupmode": { "type": "string", "enum": ["unchanged", "off", "on"], "required": true },
+				"loadmodule": { "type": "boolean", "required": true },
+				"skiphwcheck": { "type": "boolean", "required": true },
+				"rebootefi": { "type": "boolean", "required": true }
+			}
+		}
+	}
+]

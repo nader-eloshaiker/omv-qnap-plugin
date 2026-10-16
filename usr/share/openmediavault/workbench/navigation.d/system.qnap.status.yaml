@@ -1,0 +1,8 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "system.qnap.status"
+  text: _("Status")
+  position: 10
+  icon: "mdi:thermometer"
+  url: "/system/qnap/status"

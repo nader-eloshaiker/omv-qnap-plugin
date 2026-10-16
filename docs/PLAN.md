@@ -1,0 +1,410 @@
+# openmediavault-qnap — Implementation Plan
+
+Status: **Phase 1 scaffolded** (2026-10-16). This document is the design of
+record; update it as decisions change.
+
+## 1. Goal
+
+Give QNAP NAS hardware running OpenMediaVault the hardware experience QTS
+provides, without QNAP's proprietary code:
+
+- QTS-style **Smart Fan** control (Quiet / Normal / Performance / Custom /
+  Manual), driven by CPU, system (EC), disk and NVMe temperatures.
+- **Front-panel LEDs** that mean what they mean on QTS (status, disk, USB).
+- **Buttons** (USB One Touch Copy, Reset) that do something useful.
+- **EC settings**: power recovery, EuP mode, LED brightness.
+- Live **fan/temperature status** in the OMV UI and dashboard.
+
+Primary target: **TS-253D**. Secondary: anything supported by
+[qnap8528](https://github.com/0xGiddi/qnap8528) (≈120 models) and QM2 cards
+via [qnap-qm2](https://github.com/0xGiddi/qnap-qm2).
+
+### Non-goals
+
+- Shipping or calling QNAP binaries (`hal_app`, `libuLinux_hal.so`) — this
+  is what [omv-panq-plugin](https://github.com/Dag-Rui/omv-panq-plugin) and
+  [Stonyx/QNAP-EC](https://github.com/Stonyx/QNAP-EC) do; it is legally
+  murky and model-fragile.
+- Talking to the EC directly from userspace (`iopl`/`ioperm`). The kernel
+  driver serialises EC access; userspace port I/O races with it.
+- Reproducing QTS features unrelated to hardware (One Touch Copy's full
+  backup-job UI, QTS factory reset semantics).
+- (Initially) building/installing the kernel drivers — see Phase 4.
+
+## 2. Key research findings
+
+Full notes are in [`docs/reference/`](reference/). The decisions below rest
+on these facts:
+
+| Finding | Consequence |
+|-|-|
+| qnap8528 exposes **only manual PWM** (`pwmN`, 0–255, no `pwmN_enable`), no way to return the fan to EC auto mode | The plugin **must** run a control loop and must fail safe to full speed |
+| TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`; ENE EC → needs `skip_hw_check=true` | Expose `skip_hw_check` in the UI; TS-253D is the reference config |
+| hwmon index is not stable (`hwmon3` on one box, `hwmonN` on another) | Always discover devices by `name` |
+| EC temps include junk channels (e.g. `temp11=2°C` on TS-464); "CPU" EC temps may be bogus on x86 | Filter implausible values; use coretemp/k10temp for CPU |
+| Button codes: source says `BTN_1`=USB Copy, `BTN_2`=Reset (**README says the opposite**); `BTN_0`=chassis open; power button is ACPI | Verify with `evtest` on hardware before Phase 3 |
+| qnap8528 sysfs attrs under `ec/` and `vpd/` have no trailing newline | Strip on read |
+| EC access may block up to ~5 s; all consumers share it | One daemon owns polling; UI reads the daemon's status file |
+| `smartctl` without `-n standby` wakes sleeping disks | Disk temps via `smartctl -n standby -A -j`, own (slower) interval |
+| QTS publishes **no numeric fan thresholds** | Presets are our own, tuned on TS-253D (see §5.2) |
+| omv-panq / FanControl.sh have no hysteresis, no failsafe, config outside OMV's DB | Do all three properly |
+| `reboot=efi` on the kernel command line fixes reboot hangs on QNAP x86 boxes (user-reported on TS-253D) | Offer it as a Hardware option via a `/etc/default/grub.d` drop-in |
+
+## 3. Architecture
+
+```
+┌──────────────── OMV workbench (Angular, YAML-defined) ────────────────┐
+│ System › QNAP › Status (datatable, 5 s)   Fan control (form)          │
+│                 Hardware (form)           Dashboard widget (grid)     │
+└───────────────┬───────────────────────────────────────────────────────┘
+                │ JSON-RPC  (service "Qnap")
+┌───────────────▼──────────────┐   Save → confdb → module "qnap" dirty
+│ engined/rpc/qnap.inc         │   Apply → omv-salt deploy run qnap
+│  getSettings / setFan…       │
+│  getHardwareSettings / set…  │──── qnapd status|info --json (read only)
+│  getStatus                   │
+└───────────────┬──────────────┘
+                │ config.xml  (conf.service.qnap)
+┌───────────────▼──────────────────────────────────────────────────────┐
+│ srv/salt/omv/deploy/qnap                                              │
+│  /etc/qnapd/qnapd.json                 (daemon config)                │
+│  /etc/modules-load.d|modprobe.d/openmediavault-qnap.conf (optional)   │
+│  /etc/default/grub.d/openmediavault-qnap.cfg + update-grub (optional) │
+│  EC power_recovery / eup_mode (one-shot sysfs writes)                 │
+│  qnapd.service running|dead                                           │
+└───────────────┬──────────────────────────────────────────────────────┘
+                │
+┌───────────────▼──────────────┐    /run/qnapd/status.json
+│ /usr/sbin/qnapd (python3)    │──► (read by qnapd status → RPC)
+│  fan loop · status LED ·     │
+│  [P2] disk LEDs/RAID ·       │
+│  [P3] buttons/USB LED/beeper │
+└───────────────┬──────────────┘
+                │ sysfs / evdev only
+┌───────────────▼──────────────────────────────────────────────────────┐
+│ qnap8528.ko (hwmon "qnap8528", leds qnap8528::*, input "qnap8528",    │
+│              /sys/devices/platform/qnap8528/{ec,vpd})                 │
+│ qm2mod.ko   (hwmon "qm2", leds qm2-N:{red,green}:slotM)  [Phase 4]   │
+│ coretemp / k10temp / nvme hwmon · smartctl                            │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Why a single Python daemon
+
+- One owner of hardware state → no EC races, one place for failsafe logic.
+- `python3` is already a dependency of openmediavault; stdlib only, so the
+  package stays `Architecture: all` with no compiled code.
+- Fan, LED and button logic all need the same health picture (fan failed →
+  status LED red → beep), so they belong in one process.
+- The OMV UI never pokes hardware for writes; for reads it uses the
+  daemon's status file (or a one-shot live read when the daemon is off).
+
+### Why not `fancontrol` (lm-sensors)
+
+It can drive `pwm1` from hwmon temps, but it cannot use disk temperatures
+without waking disks, has no notion of LEDs/buttons, and its config format
+is awkward to generate and validate from the OMV UI.
+
+## 4. Configuration model
+
+One singleton datamodel, `conf.service.qnap` (xpath `//services/qnap`),
+defaults defined only in
+[`conf.service.qnap.json`](../usr/share/openmediavault/datamodels/conf.service.qnap.json).
+Two RPC write methods (`setFanSettings`, `setHardwareSettings`) each own a
+subset so that each form page posts only its own fields.
+
+| Field | Type / default | Page | Phase |
+|-|-|-|-|
+| `enable` | bool / false | Fan | 1 |
+| `interval` | 2–120 s / 10 | Fan | 1 |
+| `fanmode` | quiet\|normal\|performance\|custom\|manual / normal | Fan | 1 |
+| `manualpwm` | 0–255 / 160 | Fan | 1 |
+| `minpwm`, `maxpwm`, `hysteresis` | 64, 255, 3 °C | Fan (custom) | 1 |
+| `use{cpu,system,disk,nvme}` | bool / true | Fan | 1 |
+| `{cpu,sys,disk,nvme}{low,high}` | °C | Fan (custom) | 1 |
+| `diskinterval` | 10–3600 s / 60 | Fan | 1 |
+| `ledstatus` | bool / true | Hardware | 1 |
+| `ledbrightness` | 0–100 / 100 | Hardware | 1 |
+| `powerrecovery` | unchanged\|off\|on\|last | Hardware | 1 |
+| `eupmode` | unchanged\|off\|on | Hardware | 1 |
+| `loadmodule`, `skiphwcheck` | bool / false | Hardware | 1 |
+| `rebootefi` | bool / false | Hardware | 1 |
+| `leddisk` (activity/error/locate) | bool | Hardware | 2 |
+| `ledschedule` (night brightness + times) | | Hardware | 2 |
+| `copyaction`, `copycommand` | none\|command | Buttons | 3 |
+| `resetaction`, `resetcommand`, `resethold` | none\|command, 3 s | Buttons | 3 |
+| `beeper` (events) | bool | Buttons | 3 |
+
+New fields → bump the package version and add
+`confdb/migrations.d/conf.service.qnap_<version>.sh` that adds the keys
+(`omv_config_add_key`), per OMV convention.
+
+## 5. Fan control design (Phase 1 — implemented)
+
+### 5.1 Algorithm
+
+Every `interval` seconds:
+
+1. Read sources (each optional):
+   - **cpu**: coretemp `Package id 0` / k10temp `Tctl|Tdie` (hottest).
+   - **system**: all qnap8528 `tempN_input` within 5–110 °C.
+   - **nvme**: each `nvme` hwmon `temp1` (Composite).
+   - **disk**: `smartctl -n standby -A -j /dev/sdX` for non-removable
+     disks, cached for `diskinterval`; standby disks are skipped.
+2. **Critical override**: any enabled source at/above its critical limit
+   (cpu 90, system 55, disk 55, nvme 75 °C) → PWM 255.
+3. **Curve**: for each source `demand = clamp((T − low)/(high − low), 0, 1)`;
+   `pwm = minpwm + max(demand) × (maxpwm − minpwm)` (the "max of normalised
+   ratios" idea from omv-panq, generalised to N sources).
+4. **Hysteresis**: ramp **up** immediately. Ramp **down** only to the
+   target computed with temperatures + `hysteresis` °C, and by at most
+   16 PWM per cycle.
+5. Write `pwmN` for every PWM group when changed, and at least every 60 s
+   (guards against EC resets).
+6. **Fan failure**: `fanN_input` = 0 RPM at PWM ≥ 64 (or invalid 65535) for
+   3 consecutive cycles → fault.
+7. **No sensors at all** (every enabled source empty) → PWM 255 + fault.
+8. Status LED: green when healthy, red on any fault.
+9. Write `/run/qnapd/status.json` atomically.
+
+### 5.2 Presets (initial values, to be tuned on a TS-253D)
+
+| Mode | CPU °C | System °C | Disk °C | NVMe °C | PWM range |
+|-|-|-|-|-|-|
+| Quiet | 50→85 | 35→50 | 40→50 | 50→70 | 40–200 |
+| Normal | 45→80 | 30→45 | 38→48 | 45→65 | 64–255 |
+| Performance | 40→70 | 28→40 | 35→45 | 40→60 | 100–255 |
+
+Notes: the TS-253D has a J4125 (Tjmax 105 °C) and one 70 mm fan, rated
+for 0–40 °C ambient. Disks are the thermally sensitive part of a NAS
+(manufacturers spec ≤ 55–60 °C), hence the low disk ranges.
+**Tuning task:** measure RPM vs PWM on a TS-253D (stall PWM, noise) and set
+`minpwm` per preset so the fan never stalls.
+
+### 5.3 Failure handling
+
+| Event | Behaviour |
+|-|-|
+| Daemon stops cleanly | `ExecStopPost=qnapd failsafe` → PWM 255 |
+| Daemon crashes / killed | same `ExecStopPost`, and status LED → blinking red |
+| Exception in a loop iteration | PWM 255 for that cycle, logged, loop continues |
+| Driver not loaded | daemon exits 1; systemd retries every 10 s, 5× per 5 min |
+| Sensor source missing | ignored if others work; all missing → 255 |
+
+Trade-off: disabling the plugin leaves the fan at full speed (loud) until
+reboot. That's deliberate — qnap8528 offers no way to give control back to
+the EC, and loud is better than cooked. The UI hint states this.
+*Open question:* add a user-chosen "speed when stopped" (default 255)?
+
+## 6. LED design
+
+### 6.1 QTS semantics → qnap8528 (from the TS-x53D user guide)
+
+| QTS meaning | QTS LED | qnap8528 write | Phase |
+|-|-|-|-|
+| Ready | status solid green | `status/brightness=1` | 1 ✅ |
+| Booting / not ready | status blinking green | brightness 1 + trigger `timer` | 1 ✅ (daemon start) |
+| Fan failure, hardware error, volume full | status solid red | brightness 2 | 1 ✅ (fan/sensor) |
+| Service failed (ours) | status blinking red | brightness 2 + `timer` | 1 ✅ |
+| RAID degraded | status blinking red | brightness 2 + `timer` | 2 |
+| RAID rebuild / reshape / resync | status green/red alternating | `status/blink_bicolor` | 2 |
+| Volume ≥ 95 % full | status solid red | brightness 2 | 2 |
+| Disk present | `hddN` green | `hddN/brightness=1` | 2 |
+| Disk activity | `hddN` blinking green | brightness 1 + `timer` (≈110 ms window) or oneshot per IO | 2 |
+| Disk error (SMART fail / md faulty) | `hddN` red | brightness 2 | 2 |
+| Locate disk | `hddN` blinking red | brightness 2 + `timer` | 2 (UI button) |
+| USB device mounting / copying | `usb` blinking blue | brightness 1 + `timer` | 3 |
+| USB device mounted | `usb` solid | brightness 1 | 3 |
+| Brightness / night schedule | all LEDs | `panel_brightness` 0–100 | 1 ✅ / 2 (schedule) |
+
+Status priority (highest wins): error (solid red) > degraded (red blink) >
+rebuilding (bicolour) > starting (green blink) > ok (green). Mirrors
+qnap8528's `examples/qnap-set-status.sh`.
+
+### 6.2 Phase 2 sources
+
+- RAID: parse `/proc/mdstat` (`[U_]` → degraded, `recovery|resync|reshape`
+  → rebuilding). Optionally ZFS (`zpool status -x`) and Btrfs (`btrfs
+  device stats`) later.
+- Disk ↔ slot mapping: model config only names `hdd1`, `hdd2`; map via
+  `/sys/block/sdX/device` → ATA port (`/sys/class/ata_port`) → slot order.
+  Must be verified on hardware; provide an override table in config.
+- Disk activity: poll `/sys/block/sdX/stat` each 0.3–0.5 s (as in
+  `examples/qnap-disk-led-monitor.sh`) in a separate thread — **not**
+  `disk-activity` trigger (that's global, not per disk).
+- SMART health: reuse the disk poll (`smartctl -H`, standby-aware).
+
+## 7. Buttons design (Phase 3)
+
+- Read `/dev/input/by-path/platform-qnap8528-event` (fallback: scan
+  `/proc/bus/input/devices` for `Name="qnap8528"`) with stdlib `struct`
+  parsing of `input_event` — no python3-evdev dependency.
+- Keys: `BTN_0` chassis open, `BTN_1` USB Copy, `BTN_2` Reset (**verify;
+  README disagrees**). Measure hold time in userspace.
+- Actions (admin-configured, validated):
+  - **USB Copy**: none | run a command (e.g. an OMV rsync job via
+    `omv-rpc` / a script). USB LED blinks while the action runs, solid on
+    success, 3 short beeps on failure (QTS behaviour).
+  - **Reset** short press (≥3 s): none | command. Default: none. Never a
+    factory reset of OMV. A sensible built-in option to consider:
+    `omv-firstaid`-style "reset web UI admin password / network to DHCP" —
+    needs explicit design + confirmation in the UI.
+  - **Reset long press (≥10 s)**: none (reserved).
+  - **Chassis open**: log + OMV notification.
+- Power button stays with systemd-logind (ACPI). Document
+  `HandlePowerKey=` in `/etc/systemd/logind.conf` instead of reimplementing.
+- **Beeper** (optional): QTS uses beeps for start/shutdown/fan failure.
+  qnap8528 exposes no buzzer; investigate `pcspkr` + `beep`, or an EC
+  register (future qnap8528 feature request). Low priority.
+
+## 8. Notifications (Phase 2)
+
+Faults (fan failure, critical temperature, chassis open) should reach the
+user, not just the LED. Options, in order of preference:
+
+1. syslog with a stable tag (`qnapd`) — done in Phase 1.
+2. OMV's notification system: send via `omv-notify`/`mail` respecting the
+   *System › Notification* settings; add a `conf.system.notification`
+   entry type (`qnap`) so it can be toggled like other events.
+3. monit check on `qnapd` process (OMV already uses monit for its services).
+
+## 9. UI
+
+- Navigation: **System › QNAP** (QTS keeps fans/LEDs under *Control
+  Panel › Hardware*; OMV's equivalent is the System menu).
+  - **Status** — datatable of fans (RPM), fan duty (%), every temperature
+    source; auto-reload 5 s.
+  - **Fan control** — enable, mode, interval, sources, custom curve
+    (fields shown only for *Custom*), manual PWM.
+  - **Hardware** — driver status/board codes/EC firmware/LED list
+    (read-only), module loading + `skip_hw_check`, status LED, brightness,
+    power recovery, EuP, `reboot=efi`.
+  - *(Phase 2)* **Disks** — slot table with Locate toggle.
+  - *(Phase 3)* **Buttons** — button actions.
+- Dashboard: grid widget "QNAP fans & temperatures" (10 s).
+- *(Later)* RRD graphs via collectd exec plugin (see openmediavault-cputemp).
+- Only workbench features common to OMV 7 and 8 are used.
+
+## 10. Packaging & platform
+
+- Package `openmediavault-qnap`, `Architecture: all`, native version
+  `7.0~alpha1` (omv-extras convention: major = OMV major).
+- `Depends: openmediavault (>= 7), python3, smartmontools`;
+  `Recommends: dkms`. **No hard dependency on the drivers** (they have no
+  .deb yet); the UI shows "Not loaded" and the daemon refuses to start
+  without the hwmon device.
+- One source tree for OMV 7 (Bookworm) and 8 (Trixie): debhelper compat
+  13, quoted salt file modes, no OMV 8-only UI features. Branch into
+  `7.x`/`main` (omv-extras style) only when the two diverge.
+- `qnapd.service` is installed with `--no-enable --no-start`; salt owns
+  enable/start (`service.running` / `service.dead`), restarting on config
+  change via `watch`.
+- `postinst`: confdb create/migrate, `omv-salt deploy run qnap`,
+  `try-restart` on upgrade. `postrm purge`: drop config node, generated
+  files, grub drop-in (+ `update-grub`).
+- `reboot=efi`: drop-in `/etc/default/grub.d/openmediavault-qnap.cfg`
+  (`GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} reboot=efi"`),
+  `update-grub` only on change. Never edits `/etc/default/grub`. If the
+  user already added `reboot=efi` there by hand, the duplicate is harmless;
+  the Hardware page shows whether it is active in `/proc/cmdline`.
+  *To check:* systems booting via systemd-boot (rare on OMV) are not covered.
+- Distribution: GitHub releases first; later propose to omv-extras.
+
+## 11. Model support strategy
+
+- Everything is discovered at runtime from sysfs (fans, PWM groups, LEDs,
+  `ec/*` attributes present or not), so any qnap8528-supported model works
+  without per-model code in the plugin.
+- Multi-fan models: qnap8528 has up to 4 PWM groups. Phase 1 drives all
+  groups with the same PWM. *Phase 2 option:* per-group curves (e.g. CPU
+  fan vs disk fans on TS-x73A / TVS models).
+- Models needing `skip_hw_check`: TS-253D, TS-453D, TS-464, TS-464EU,
+  TR-464, Qu-X05 (ENE EC) — called out in the UI hint.
+- QM2 cards (Phase 4): read `qm2` hwmon temps as an extra source and drive
+  its own `pwm1` from the same curve; slot LEDs from NVMe health.
+- Unknown models: qnap8528 refuses to load → UI shows driver not loaded;
+  point the user to qnap8528's issue tracker.
+
+## 12. Phases & milestones
+
+### Phase 0 — Repo bootstrap ✅
+- [x] Research (this doc + `docs/reference/`)
+- [x] Package skeleton builds on Debian 12, lintian clean except benign tags
+- [x] Unit tests for daemon logic against a fake sysfs
+
+### Phase 1 — Fan control MVP (scaffolded, needs hardware validation)
+- [x] Datamodel, confdb, RPC, engined module, salt state, workbench pages
+- [x] `qnapd`: discovery, curve, presets, hysteresis, critical, failsafe
+- [x] Status LED (ok / fault / starting / service failed)
+- [x] Panel brightness, power recovery, EuP, module loading, `reboot=efi`
+- [ ] Install on a TS-253D with OMV 7: verify every page, Save/Apply flow,
+      dashboard widget, service status in *Diagnostics › Services*
+- [ ] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
+- [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
+      OMV spindown enabled)
+- [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink
+- [ ] Test on OMV 8 (Trixie)
+- [ ] GitHub Actions: build .deb in `debian:bookworm` + `debian:trixie`,
+      run unit tests, lintian, `php -l`
+
+### Phase 2 — QTS-like LEDs & health
+- [ ] mdstat → status LED (degraded/rebuild), volume-full check
+- [ ] Disk slot mapping + present/error/activity LEDs, Locate action in UI
+- [ ] LED brightness night schedule
+- [ ] OMV notifications for faults
+- [ ] Optional per-PWM-group curves for multi-fan models
+- [ ] confdb migration for new fields
+
+### Phase 3 — Buttons & sounds
+- [ ] evdev reader, hold-time detection, verify key mapping on TS-253D
+- [ ] USB Copy action + USB LED feedback
+- [ ] Reset button actions (safe defaults)
+- [ ] Chassis-open event, beeper investigation
+
+### Phase 4 — Driver integration
+- [ ] Package `qnap8528-dkms` / `qm2mod-dkms` (or vendor DKMS sources) and
+      make the plugin depend/recommend them; install headers automatically
+      (`linux-headers-amd64` or `proxmox-headers-*` for the OMV Proxmox kernel)
+- [ ] QM2 temperatures / fan / slot LEDs
+- [ ] Upstream contributions to qnap8528 if needed (README button table fix,
+      buzzer support, EC auto-fan restore)
+
+## 13. Testing strategy
+
+- **Unit** (`make test`): fake sysfs tree emulating a TS-253D
+  (`QNAPD_SYSFS_ROOT`); covers discovery, junk filtering, curve,
+  hysteresis, critical, manual mode, fan-failure LED, failsafe, info.
+- **Package**: build + lintian in Debian 12/13 containers; `php -l`.
+- **Integration on hardware** (manual checklist in Phase 1): fresh install,
+  upgrade, purge; Save/Apply; daemon restart on config change; reboot with
+  `loadmodule`; failsafe on crash; `reboot=efi` toggling.
+- **Soak**: 48 h with disks spinning down, check journal for PWM churn
+  (hysteresis effectiveness) and no disk wake-ups.
+
+## 14. Risks & open questions
+
+| Risk / question | Mitigation |
+|-|-|
+| EC power-on fan behaviour unknown before the daemon starts | Daemon starts early (`After=systemd-modules-load`); observe on hardware |
+| Button mapping disagreement (README vs source) | Verify with `evtest`; report upstream |
+| Disk-slot ↔ `/dev/sdX` mapping unknown | Discover via ATA port; config override |
+| `smartctl` cost on many-bay units | Separate `diskinterval`, standby-aware; consider `drivetemp` hwmon as an option |
+| qnap8528 not packaged; kernel upgrades need DKMS rebuild | Recommend dkms + headers; Phase 4 packaging |
+| Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |
+| No buzzer interface | Defer; investigate pcspkr / EC |
+| OMV 7 vs 8 UI drift | Stick to the common subset; CI on both |
+| Driver load fails on unknown model → UI just says "Not loaded" | Show dmesg hint in the Hardware page (later) |
+
+## 15. References
+
+- qnap8528 driver: <https://github.com/0xGiddi/qnap8528>
+- qnap-qm2 driver: <https://github.com/0xGiddi/qnap-qm2>
+- Prior art: <https://github.com/Dag-Rui/omv-panq-plugin>,
+  <https://github.com/Stonyx/QNAP-EC>,
+  <https://github.com/edddeduck/QNAP_Fan_Control>,
+  <https://forum.openmediavault.org/index.php?thread/57619-qnap-temperatures-fan-control/>
+- OMV plugin development: <https://docs.openmediavault.org/en/latest/development/plugins.html>,
+  <https://github.com/OpenMediaVault-Plugin-Developers>, <https://wiki.omv-extras.org/>
+- QNAP TS-x53D user guide (LED/button/beep tables):
+  <https://eu1.qnap.com/TechnicalDocument/Storage/SMB%20NAS/ts-x53d/ts-x53d-ug-en-us.pdf>
+- QTS Smart Fan: <https://docs.qnap.com/operating-system/qts/5.1.x/en-us/configuring-smart-fan-settings-27A5C976.html>

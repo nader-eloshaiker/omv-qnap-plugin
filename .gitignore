@@ -1,0 +1,20 @@
+# debhelper build output
+debian/openmediavault-*/
+debian/.debhelper/
+debian/files
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+debian/debhelper-build-stamp
+*.deb
+*.buildinfo
+*.changes
+
+# Python
+__pycache__/
+*.pyc
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

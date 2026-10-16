@@ -1,0 +1,24 @@
+Source: openmediavault-qnap
+Section: admin
+XB-Plugin-Section: utilities
+Priority: optional
+Maintainer: Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>
+Build-Depends: debhelper (>= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/nader-eloshaiker/omv-qnap-plugin
+Vcs-Git: https://github.com/nader-eloshaiker/omv-qnap-plugin.git
+Vcs-Browser: https://github.com/nader-eloshaiker/omv-qnap-plugin
+
+Package: openmediavault-qnap
+Architecture: all
+Depends: openmediavault (>= 7),
+         python3 (>= 3.9),
+         smartmontools,
+         ${misc:Depends}
+Recommends: dkms
+Description: OpenMediaVault QNAP hardware plugin
+ Fan control, status LED, front panel brightness and power recovery
+ settings for QNAP NAS devices (e.g. TS-253D) running openmediavault.
+ .
+ Requires the open source qnap8528 embedded controller driver
+ (https://github.com/0xGiddi/qnap8528) to be installed separately.

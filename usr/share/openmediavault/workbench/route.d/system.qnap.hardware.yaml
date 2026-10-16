@@ -1,0 +1,7 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/hardware"
+  title: _("Hardware")
+  editing: true
+  component: omv-system-qnap-hardware-form-page

@@ -1,0 +1,7 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/fan"
+  title: _("Fan control")
+  editing: true
+  component: omv-system-qnap-fan-form-page

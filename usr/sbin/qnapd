@@ -1,0 +1,658 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+#
+# This file is part of openmediavault-qnap.
+#
+# openmediavault-qnap is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# any later version.
+#
+# openmediavault-qnap is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with openmediavault-qnap. If not, see <http://www.gnu.org/licenses/>.
+"""
+qnapd - fan and front panel daemon for QNAP NAS devices.
+
+All hardware access goes through the qnap8528 kernel driver
+(https://github.com/0xGiddi/qnap8528) via sysfs, so the EC is never touched
+directly and concurrent readers (the OMV UI) cannot corrupt EC transactions.
+
+Sub-commands:
+  run       Run the control loop (used by qnapd.service).
+  status    Print the current readings (from the daemon, or read live).
+  info      Print driver / hardware information.
+  failsafe  Drive all fans to full speed (used by ExecStopPost).
+"""
+
+import argparse
+import glob
+import json
+import logging
+import os
+import signal
+import subprocess
+import sys
+import threading
+import time
+
+SYSFS = os.environ.get("QNAPD_SYSFS_ROOT", "/sys")
+CONFIG_FILE = os.environ.get("QNAPD_CONFIG", "/etc/qnapd/qnapd.json")
+STATUS_FILE = os.environ.get("QNAPD_STATUS", "/run/qnapd/status.json")
+
+DRIVER = "qnap8528"
+PWM_MAX = 255
+# Rewrite the PWM periodically even if unchanged, in case something else
+# (or an EC reset) changed it behind our back.
+PWM_REFRESH_SECONDS = 60
+# Never lower the PWM by more than this per control cycle.
+PWM_MAX_STEP_DOWN = 16
+# A fan reporting 0 RPM at or above this PWM for FAN_FAULT_CYCLES is failed.
+FAN_FAULT_MIN_PWM = 64
+FAN_FAULT_CYCLES = 3
+# EC temperatures outside this range are treated as junk.
+PLAUSIBLE_TEMP = (5.0, 110.0)
+
+SOURCES = ("cpu", "system", "disk", "nvme")
+
+# Fan presets modelled on QTS "Smart Fan" modes: (low, high) degrees C per
+# source, the fan starts ramping at "low" and reaches maxpwm at "high".
+PRESETS = {
+    "quiet": {
+        "cpu": (50, 85), "system": (35, 50), "disk": (40, 50),
+        "nvme": (50, 70), "pwm": (40, 200),
+    },
+    "normal": {
+        "cpu": (45, 80), "system": (30, 45), "disk": (38, 48),
+        "nvme": (45, 65), "pwm": (64, 255),
+    },
+    "performance": {
+        "cpu": (40, 70), "system": (28, 40), "disk": (35, 45),
+        "nvme": (40, 60), "pwm": (100, 255),
+    },
+}
+# Above these temperatures the fans always run at full speed.
+CRITICAL = {"cpu": 90, "system": 55, "disk": 55, "nvme": 75}
+
+log = logging.getLogger("qnapd")
+
+
+# --------------------------------------------------------------------------
+# sysfs helpers
+# --------------------------------------------------------------------------
+
+def sysfs(*parts):
+    return os.path.join(SYSFS, *parts)
+
+
+def read(path):
+    try:
+        with open(path, "r") as f:
+            # qnap8528's own attributes have no trailing newline.
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def read_int(path):
+    value = read(path)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def write(path, value):
+    with open(path, "w") as f:
+        f.write(str(value))
+
+
+def find_hwmon(name):
+    return [d for d in sorted(glob.glob(sysfs("class", "hwmon", "hwmon*")))
+            if read(os.path.join(d, "name")) == name]
+
+
+def index_of(path, prefix):
+    base = os.path.basename(path)
+    digits = base[len(prefix):].split("_")[0]
+    return int(digits) if digits.isdigit() else 0
+
+
+# --------------------------------------------------------------------------
+# Configuration
+# --------------------------------------------------------------------------
+
+def to_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on", "y")
+
+
+def to_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+class Settings:
+    """Typed view of conf.service.qnap as rendered by salt."""
+
+    def __init__(self, raw=None):
+        raw = raw or {}
+        self.enable = to_bool(raw.get("enable", False))
+        self.interval = max(2, to_int(raw.get("interval"), 10))
+        self.fanmode = raw.get("fanmode", "normal")
+        if self.fanmode not in ("quiet", "normal", "performance",
+                                "custom", "manual"):
+            self.fanmode = "normal"
+        self.manualpwm = self._pwm(raw.get("manualpwm"), 160)
+        self.hysteresis = max(0, to_int(raw.get("hysteresis"), 3))
+        self.diskinterval = max(10, to_int(raw.get("diskinterval"), 60))
+        self.ledstatus = to_bool(raw.get("ledstatus", True))
+        self.ledbrightness = min(100, max(0, to_int(
+            raw.get("ledbrightness"), 100)))
+        self.use = {src: to_bool(raw.get("use" + src, True))
+                    for src in SOURCES}
+        if self.fanmode in PRESETS:
+            preset = PRESETS[self.fanmode]
+            self.ranges = {src: preset[src] for src in SOURCES}
+            self.pwm_range = preset["pwm"]
+        else:
+            self.ranges = {
+                "cpu": (to_int(raw.get("cpulow"), 45),
+                        to_int(raw.get("cpuhigh"), 80)),
+                "system": (to_int(raw.get("syslow"), 30),
+                           to_int(raw.get("syshigh"), 45)),
+                "disk": (to_int(raw.get("disklow"), 38),
+                         to_int(raw.get("diskhigh"), 48)),
+                "nvme": (to_int(raw.get("nvmelow"), 45),
+                         to_int(raw.get("nvmehigh"), 65)),
+            }
+            lo = self._pwm(raw.get("minpwm"), 64)
+            hi = self._pwm(raw.get("maxpwm"), 255)
+            self.pwm_range = (min(lo, hi), max(lo, hi))
+
+    @staticmethod
+    def _pwm(value, default):
+        return min(PWM_MAX, max(0, to_int(value, default)))
+
+    @classmethod
+    def load(cls, path=None):
+        path = path or CONFIG_FILE
+        with open(path, "r") as f:
+            return cls(json.load(f))
+
+
+# --------------------------------------------------------------------------
+# Hardware access
+# --------------------------------------------------------------------------
+
+class Hardware:
+    def __init__(self):
+        found = find_hwmon(DRIVER)
+        self.ec = found[0] if found else None
+
+    def present(self):
+        return self.ec is not None
+
+    def fans(self):
+        if not self.ec:
+            return []
+        result = []
+        for path in sorted(glob.glob(os.path.join(self.ec, "fan*_input")),
+                           key=lambda p: index_of(p, "fan")):
+            rpm = read_int(path)
+            # The EC returns 65535 for missing or broken fans.
+            if rpm is not None and rpm >= 65535:
+                rpm = None
+            result.append({"name": "fan%d" % index_of(path, "fan"),
+                           "rpm": rpm})
+        return result
+
+    def pwm_paths(self):
+        if not self.ec:
+            return []
+        return sorted((p for p in glob.glob(os.path.join(self.ec, "pwm*"))
+                       if os.path.basename(p)[3:].isdigit()),
+                      key=lambda p: index_of(p, "pwm"))
+
+    def read_pwm(self):
+        values = [read_int(p) for p in self.pwm_paths()]
+        values = [v for v in values if v is not None]
+        return max(values) if values else None
+
+    def set_pwm(self, value):
+        value = min(PWM_MAX, max(0, int(value)))
+        for path in self.pwm_paths():
+            write(path, value)
+
+    @staticmethod
+    def _temps(hwmon, prefix):
+        result = []
+        for path in sorted(glob.glob(os.path.join(hwmon, "temp*_input")),
+                           key=lambda p: index_of(p, "temp")):
+            value = read_int(path)
+            if value is None:
+                continue
+            label = read(path.replace("_input", "_label"))
+            result.append(("%s%d" % (prefix, index_of(path, "temp")),
+                           label, value / 1000.0))
+        return result
+
+    def system_temps(self):
+        if not self.ec:
+            return []
+        lo, hi = PLAUSIBLE_TEMP
+        return [(name, "EC " + name, t)
+                for name, _, t in self._temps(self.ec, "temp")
+                if lo <= t <= hi]
+
+    def cpu_temps(self):
+        for driver in ("coretemp", "k10temp", "zenpower"):
+            for hwmon in find_hwmon(driver):
+                temps = self._temps(hwmon, "cpu")
+                preferred = [t for t in temps
+                             if t[1] in ("Package id 0", "Tctl", "Tdie")]
+                temps = preferred or temps
+                if temps:
+                    best = max(temps, key=lambda t: t[2])
+                    return [("cpu", best[1] or "CPU", best[2])]
+        return []
+
+    def nvme_temps(self):
+        result = []
+        for i, hwmon in enumerate(find_hwmon("nvme")):
+            temps = self._temps(hwmon, "t")
+            # temp1 is the "Composite" temperature.
+            if temps:
+                result.append(("nvme%d" % i, "NVMe %d" % i, temps[0][2]))
+        return result
+
+
+class DiskTemps:
+    """SATA/SAS disk temperatures via smartctl, cached between polls.
+
+    Disks in standby are skipped (smartctl -n standby) so that fan control
+    never spins up sleeping disks.
+    """
+
+    def __init__(self, interval):
+        self.interval = interval
+        self.last = None
+        self.cache = []
+
+    def get(self, now):
+        if self.last is None or now - self.last >= self.interval:
+            self.last = now
+            self.cache = self.refresh()
+        return self.cache
+
+    @staticmethod
+    def devices():
+        result = []
+        for path in sorted(glob.glob(sysfs("block", "sd*"))):
+            if read(os.path.join(path, "removable")) == "1":
+                continue
+            result.append(os.path.basename(path))
+        return result
+
+    def refresh(self):
+        result = []
+        for dev in self.devices():
+            try:
+                proc = subprocess.run(
+                    ["smartctl", "-n", "standby", "-A", "-j", "/dev/" + dev],
+                    capture_output=True, text=True, timeout=20)
+                data = json.loads(proc.stdout or "{}")
+            except (OSError, subprocess.SubprocessError, ValueError):
+                continue
+            temp = (data.get("temperature") or {}).get("current")
+            if isinstance(temp, (int, float)):
+                result.append((dev, dev, float(temp)))
+        return result
+
+
+class StatusLed:
+    """Front status LED (qnap8528::status): 0 off, 1 green, 2 red."""
+
+    STATES = {
+        # state: (brightness, blink)
+        "ok": (1, False),
+        "starting": (1, True),
+        "warning": (2, True),
+        "fault": (2, False),
+    }
+
+    def __init__(self, name="qnap8528::status"):
+        self.path = sysfs("class", "leds", name)
+        self.state = None
+
+    def present(self):
+        return os.path.isdir(self.path)
+
+    def set(self, state):
+        if state == self.state or not self.present():
+            return
+        brightness, blink = self.STATES[state]
+        try:
+            write(os.path.join(self.path, "trigger"), "none")
+            # Set the colour first, then the trigger, so the EC blinks
+            # the requested colour.
+            write(os.path.join(self.path, "brightness"), brightness)
+            if blink:
+                write(os.path.join(self.path, "trigger"), "timer")
+            self.state = state
+        except OSError as e:
+            log.warning("Failed to set status LED to %s: %s", state, e)
+
+
+def set_panel_brightness(value):
+    path = sysfs("class", "leds", "qnap8528::panel_brightness", "brightness")
+    if os.path.exists(path):
+        try:
+            write(path, value)
+        except OSError as e:
+            log.warning("Failed to set panel brightness: %s", e)
+
+
+# --------------------------------------------------------------------------
+# Fan curve
+# --------------------------------------------------------------------------
+
+def demand(temp, low, high):
+    """Map a temperature onto 0..1 between low and high."""
+    if high <= low:
+        return 1.0 if temp >= high else 0.0
+    return min(1.0, max(0.0, (temp - low) / float(high - low)))
+
+
+class FanCurve:
+    """Linear curve driven by the hottest source relative to its range.
+
+    Each enabled source is normalised to 0..1 against its (low, high) range
+    and the maximum demand selects the PWM between minpwm and maxpwm.
+    Ramping up is immediate; ramping down uses temperatures inflated by the
+    hysteresis and is rate limited so the fan does not oscillate.
+    """
+
+    def __init__(self, settings):
+        self.settings = settings
+
+    def target(self, readings, offset=0.0):
+        level = 0.0
+        for src, temps in readings.items():
+            if not temps or not self.settings.use.get(src):
+                continue
+            low, high = self.settings.ranges[src]
+            level = max(level, demand(max(temps) + offset, low, high))
+        lo, hi = self.settings.pwm_range
+        return int(round(lo + level * (hi - lo)))
+
+    def critical(self, readings):
+        for src, temps in readings.items():
+            if temps and self.settings.use.get(src) and \
+                    max(temps) >= CRITICAL[src]:
+                return src
+        return None
+
+    def next_pwm(self, current, readings):
+        """Return (pwm, reason)."""
+        src = self.critical(readings)
+        if src:
+            return PWM_MAX, "critical %s temperature" % src
+        up = self.target(readings)
+        if current is None or up >= current:
+            return up, "curve"
+        down = self.target(readings, offset=self.settings.hysteresis)
+        return min(current, max(down, current - PWM_MAX_STEP_DOWN)), "curve"
+
+
+# --------------------------------------------------------------------------
+# Daemon
+# --------------------------------------------------------------------------
+
+def collect(hw, settings, disks=None, now=None):
+    """Return ({source: [temps]}, [rows]) for the enabled sources."""
+    now = time.monotonic() if now is None else now
+    sensors = {
+        "cpu": hw.cpu_temps(),
+        "system": hw.system_temps(),
+        "nvme": hw.nvme_temps(),
+        "disk": disks.get(now) if disks else [],
+    }
+    readings = {src: [t for _, _, t in values]
+                for src, values in sensors.items()}
+    rows = []
+    for src in SOURCES:
+        for name, label, t in sensors[src]:
+            rows.append({"type": "temperature", "source": src, "name": name,
+                         "label": label or name, "value": round(t, 1),
+                         "unit": "°C"})
+    return readings, rows
+
+
+def build_status(hw, rows, pwm, mode, reason, faults, running):
+    fan_rows = [{"type": "fan", "source": "fan", "name": f["name"],
+                 "label": f["name"],
+                 "value": f["rpm"] if f["rpm"] is not None else "n/a",
+                 "unit": "RPM"} for f in hw.fans()]
+    pwm_rows = []
+    if pwm is not None:
+        pwm_rows.append({"type": "pwm", "source": "fan", "name": "pwm",
+                         "label": "Fan duty", "unit": "%",
+                         "value": int(round(pwm * 100.0 / PWM_MAX))})
+    return {
+        "timestamp": time.time(),
+        "running": running,
+        "driver": hw.present(),
+        "mode": mode,
+        "pwm": pwm,
+        "reason": reason,
+        "faults": faults,
+        "rows": fan_rows + pwm_rows + rows,
+    }
+
+
+def write_status(status):
+    directory = os.path.dirname(STATUS_FILE)
+    try:
+        os.makedirs(directory, exist_ok=True)
+        tmp = STATUS_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(status, f)
+        os.replace(tmp, STATUS_FILE)
+    except OSError as e:
+        log.warning("Failed to write status file: %s", e)
+
+
+class Daemon:
+    def __init__(self, settings):
+        self.settings = settings
+        self.hw = Hardware()
+        self.curve = FanCurve(settings)
+        self.disks = DiskTemps(settings.diskinterval) \
+            if settings.use["disk"] else None
+        self.led = StatusLed()
+        self.pwm = None
+        self.last_write = 0.0
+        self.zero_rpm = {}
+        self.stop = threading.Event()
+
+    def check_fans(self, pwm):
+        faults = []
+        for fan in self.hw.fans():
+            name = fan["name"]
+            if fan["rpm"] is None or (fan["rpm"] == 0 and
+                                      (pwm or 0) >= FAN_FAULT_MIN_PWM):
+                self.zero_rpm[name] = self.zero_rpm.get(name, 0) + 1
+            else:
+                self.zero_rpm[name] = 0
+            if self.zero_rpm[name] >= FAN_FAULT_CYCLES:
+                faults.append("%s not spinning" % name)
+        return faults
+
+    def step(self, now=None):
+        now = time.monotonic() if now is None else now
+        faults = []
+        readings, rows = collect(self.hw, self.settings, self.disks, now)
+        if self.settings.fanmode == "manual":
+            pwm, reason = self.settings.manualpwm, "manual"
+            src = self.curve.critical(readings)
+            if src:
+                pwm, reason = PWM_MAX, "critical %s temperature" % src
+        elif not any(readings[src] for src in SOURCES
+                     if self.settings.use[src]):
+            pwm, reason = PWM_MAX, "no temperature sensors"
+            faults.append(reason)
+        else:
+            pwm, reason = self.curve.next_pwm(self.pwm, readings)
+
+        if pwm != self.pwm or now - self.last_write >= PWM_REFRESH_SECONDS:
+            try:
+                self.hw.set_pwm(pwm)
+                if pwm != self.pwm:
+                    log.info("PWM %s -> %d (%s)", self.pwm, pwm, reason)
+                self.pwm = pwm
+                self.last_write = now
+            except OSError as e:
+                faults.append("cannot set fan speed")
+                log.error("Failed to set PWM: %s", e)
+
+        faults += self.check_fans(self.pwm)
+        if self.settings.ledstatus:
+            self.led.set("fault" if faults else "ok")
+        status = build_status(self.hw, rows, self.pwm,
+                              self.settings.fanmode, reason, faults, True)
+        write_status(status)
+        return status
+
+    def run(self):
+        if not self.hw.present():
+            log.error("The %s hwmon device was not found; is the driver "
+                      "loaded?", DRIVER)
+            return 1
+        for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            signal.signal(sig, lambda *_: self.stop.set())
+        if self.settings.ledstatus:
+            self.led.set("starting")
+        set_panel_brightness(self.settings.ledbrightness)
+        log.info("Started (mode=%s, interval=%ds)", self.settings.fanmode,
+                 self.settings.interval)
+        while not self.stop.is_set():
+            try:
+                self.step()
+            except Exception:  # Never leave the fan at a low speed.
+                log.exception("Control loop failed, fans to full speed")
+                failsafe()
+            self.stop.wait(self.settings.interval)
+        log.info("Stopping")
+        return 0
+
+
+def failsafe(service_result=None):
+    """Drive all fans to full speed; flag the status LED on failure."""
+    hw = Hardware()
+    try:
+        hw.set_pwm(PWM_MAX)
+    except OSError as e:
+        log.error("Failsafe could not set PWM: %s", e)
+    if service_result not in (None, "", "success"):
+        StatusLed().set("warning")
+    return 0
+
+
+# --------------------------------------------------------------------------
+# CLI
+# --------------------------------------------------------------------------
+
+def load_settings_or_default():
+    try:
+        return Settings.load()
+    except (OSError, ValueError):
+        return Settings()
+
+
+def cmd_run(args):
+    return Daemon(Settings.load(args.config)).run()
+
+
+def cmd_status(args):
+    settings = load_settings_or_default()
+    status = None
+    try:
+        with open(STATUS_FILE) as f:
+            status = json.load(f)
+        if time.time() - status.get("timestamp", 0) > \
+                max(30, 3 * settings.interval):
+            status = None
+    except (OSError, ValueError):
+        status = None
+    if status is None:
+        # Daemon not running: read live, without waking disks via smartctl.
+        hw = Hardware()
+        _, rows = collect(hw, settings)
+        status = build_status(hw, rows, hw.read_pwm(), settings.fanmode,
+                              None, [], False)
+    if args.json:
+        print(json.dumps(status))
+    else:
+        for row in status["rows"]:
+            print("%-12s %-20s %s %s" % (row["type"], row["label"],
+                                         row["value"], row["unit"]))
+    return 0
+
+
+def cmd_info(args):
+    ec_dir = sysfs("devices", "platform", DRIVER)
+    info = {
+        "loaded": os.path.isdir(sysfs("module", DRIVER)),
+        "hwmon": Hardware().present(),
+        "fw_version": read(os.path.join(ec_dir, "ec", "fw_version")),
+        "cpld_version": read(os.path.join(ec_dir, "ec", "cpld_version")),
+        "power_recovery": read(os.path.join(ec_dir, "ec", "power_recovery")),
+        "eup_mode": read(os.path.join(ec_dir, "ec", "eup_mode")),
+        "mainboard_model": read(os.path.join(ec_dir, "vpd",
+                                             "mainboard_model")),
+        "backplane_model": read(os.path.join(ec_dir, "vpd",
+                                             "backplane_model")),
+        "reboot_efi": "reboot=efi" in (read(
+            os.environ.get("QNAPD_CMDLINE", "/proc/cmdline")) or "").split(),
+        "leds": sorted(os.path.basename(p)[len(DRIVER) + 2:] for p in
+                       glob.glob(sysfs("class", "leds", DRIVER + "::*"))),
+    }
+    print(json.dumps(info) if args.json else
+          "\n".join("%s: %s" % kv for kv in info.items()))
+    return 0
+
+
+def cmd_failsafe(args):
+    return failsafe(os.environ.get("SERVICE_RESULT"))
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="qnapd", description=__doc__,
+                                     formatter_class=argparse.
+                                     RawDescriptionHelpFormatter)
+    parser.add_argument("-d", "--debug", action="store_true")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p = sub.add_parser("run")
+    p.add_argument("-c", "--config", default=None)
+    p.set_defaults(func=cmd_run)
+    for name, func in (("status", cmd_status), ("info", cmd_info)):
+        p = sub.add_parser(name)
+        p.add_argument("--json", action="store_true")
+        p.set_defaults(func=func)
+    sub.add_parser("failsafe").set_defaults(func=cmd_failsafe)
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
+                        format="%(levelname)s: %(message)s")
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,6 @@
+openmediavault-qnap (7.0~alpha1) stable; urgency=low
+
+  * Initial development release: fan control, status LED, panel
+    brightness and power recovery via the qnap8528 driver.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Fri, 16 Oct 2026 22:07:58 +1100

@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# Salt (omv-salt deploy run qnap) enables/starts the daemon, not dpkg.
+override_dh_installsystemd:
+	dh_installsystemd --name=qnapd --no-enable --no-start
+
+# The top-level Makefile is a developer helper only; keep debhelper's
+# build system away from it.
+override_dh_auto_clean override_dh_auto_build override_dh_auto_test override_dh_auto_install:

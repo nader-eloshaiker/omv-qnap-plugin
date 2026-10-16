@@ -1,0 +1,152 @@
+{
+	"type": "config",
+	"id": "conf.service.qnap",
+	"title": "QNAP hardware",
+	"queryinfo": {
+		"xpath": "//services/qnap",
+		"iterable": false
+	},
+	"properties": {
+		"enable": {
+			"type": "boolean",
+			"default": false
+		},
+		"interval": {
+			"type": "integer",
+			"minimum": 2,
+			"maximum": 120,
+			"default": 10
+		},
+		"fanmode": {
+			"type": "string",
+			"enum": ["quiet", "normal", "performance", "custom", "manual"],
+			"default": "normal"
+		},
+		"manualpwm": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 255,
+			"default": 160
+		},
+		"minpwm": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 255,
+			"default": 64
+		},
+		"maxpwm": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 255,
+			"default": 255
+		},
+		"hysteresis": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 15,
+			"default": 3
+		},
+		"usecpu": {
+			"type": "boolean",
+			"default": true
+		},
+		"cpulow": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 45
+		},
+		"cpuhigh": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 80
+		},
+		"usesystem": {
+			"type": "boolean",
+			"default": true
+		},
+		"syslow": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 30
+		},
+		"syshigh": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 45
+		},
+		"usedisk": {
+			"type": "boolean",
+			"default": true
+		},
+		"disklow": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 38
+		},
+		"diskhigh": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 48
+		},
+		"diskinterval": {
+			"type": "integer",
+			"minimum": 10,
+			"maximum": 3600,
+			"default": 60
+		},
+		"usenvme": {
+			"type": "boolean",
+			"default": true
+		},
+		"nvmelow": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 45
+		},
+		"nvmehigh": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 110,
+			"default": 65
+		},
+		"ledstatus": {
+			"type": "boolean",
+			"default": true
+		},
+		"ledbrightness": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 100,
+			"default": 100
+		},
+		"powerrecovery": {
+			"type": "string",
+			"enum": ["unchanged", "off", "on", "last"],
+			"default": "unchanged"
+		},
+		"eupmode": {
+			"type": "string",
+			"enum": ["unchanged", "off", "on"],
+			"default": "unchanged"
+		},
+		"loadmodule": {
+			"type": "boolean",
+			"default": false
+		},
+		"skiphwcheck": {
+			"type": "boolean",
+			"default": false
+		},
+		"rebootefi": {
+			"type": "boolean",
+			"default": false
+		}
+	}
+}

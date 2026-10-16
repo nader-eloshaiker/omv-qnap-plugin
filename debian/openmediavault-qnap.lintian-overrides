@@ -1,0 +1,4 @@
+# openmediavault loads its salt states from /srv/salt.
+openmediavault-qnap: dir-or-file-in-srv *
+# Plugin-Section is read by the openmediavault plugin manager.
+openmediavault-qnap: unknown-field Plugin-Section
