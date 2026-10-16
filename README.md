@@ -8,7 +8,7 @@ It does not use QNAP's proprietary binaries.
 Primary target is the **TS-253D**. Any model supported by qnap8528 should
 work, because all hardware is discovered at runtime.
 
-> **Status: early development (7.0~alpha1).** Phase 1 is scaffolded and
+> **Status: early development (7.0~alpha2).** Phase 1 is scaffolded and
 > unit-tested but not yet validated on hardware. See
 > [docs/PLAN.md](docs/PLAN.md).
 
@@ -25,7 +25,9 @@ work, because all hardware is discovered at runtime.
 | Status page and dashboard widget for fans and temperatures | 1 |
 | RAID-aware status LED, disk LEDs (present/activity/error/locate), LED schedule, notifications | 2 |
 | USB Copy and Reset buttons, USB LED, beeper | 3 |
-| Bundled DKMS drivers (qnap8528, qnap-qm2), QM2 card support | 4 |
+| QM2 expansion cards (qnap-qm2): card fan control from its slot and NVMe temperatures | 1 |
+| QM2 slot LEDs (present / error / locate) | 2 |
+| Bundled DKMS drivers (qnap8528, qnap-qm2) | 4 |
 
 ## Requirements
 
@@ -39,8 +41,8 @@ work, because all hardware is discovered at runtime.
   modprobe qnap8528 skip_hw_check=true   # TS-253D / TS-453D / TS-464 need skip_hw_check
   ```
 
-- Optional: [qnap-qm2](https://github.com/0xGiddi/qnap-qm2) for QM2 cards
-  (used from Phase 4).
+- For QM2 cards: the [qnap-qm2](https://github.com/0xGiddi/qnap-qm2)
+  driver (`qm2mod`), installed the same way.
 
 ## Install
 

@@ -14,10 +14,13 @@ provides, without QNAP's proprietary code:
 - **Buttons** (USB One Touch Copy, Reset) that do something useful.
 - **EC settings**: power recovery, EuP mode, LED brightness.
 - Live **fan/temperature status** in the OMV UI and dashboard.
+- **QM2 expansion cards** (via qnap-qm2): card fan control from the
+  card's own sensors (Phase 1) and per-slot LEDs (Phase 2).
 
-Primary target: **TS-253D**. Secondary: anything supported by
-[qnap8528](https://github.com/0xGiddi/qnap8528) (≈120 models) and QM2 cards
-via [qnap-qm2](https://github.com/0xGiddi/qnap-qm2).
+Primary target: **TS-253D**, with and without a QM2 card. Secondary:
+anything supported by [qnap8528](https://github.com/0xGiddi/qnap8528)
+(≈120 models). QM2 cards via [qnap-qm2](https://github.com/0xGiddi/qnap-qm2)
+are a first-class target, not an add-on.
 
 ### Non-goals
 
@@ -48,6 +51,8 @@ on these facts:
 | `smartctl` without `-n standby` wakes sleeping disks | Disk temps via `smartctl -n standby -A -j`, own (slower) interval |
 | QTS publishes **no numeric fan thresholds** | Presets are our own, tuned on TS-253D (see §5.2) |
 | omv-panq / FanControl.sh have no hysteresis, no failsafe, config outside OMV's DB | Do all three properly |
+| qm2mod: hwmon `qm2` per card (child of `platform/qm2.N`), `temp1..N` = one sensor per M.2 slot, `fan1_input` (60 RPM steps), `pwm1` 0–255; `fan_default` returns the fan to the PIC but nobody knows whether that is temperature controlled | Each card is its own fan zone; failsafe stays at PWM 255 |
+| qm2mod's I2C adapter is a child of the card's PCIe switch, and its number is in every LED name (`qm2-<adapter>:{red,green}:slotN`) | NVMe SSDs on a card are found by PCI path (switch → downstream port → nvme) |
 | `reboot=efi` on the kernel command line fixes reboot hangs on QNAP x86 boxes (user-reported on TS-253D) | Offer it as a Hardware option via a `/etc/default/grub.d` drop-in |
 
 ## 3. Architecture
@@ -84,7 +89,7 @@ on these facts:
 ┌───────────────▼──────────────────────────────────────────────────────┐
 │ qnap8528.ko (hwmon "qnap8528", leds qnap8528::*, input "qnap8528",    │
 │              /sys/devices/platform/qnap8528/{ec,vpd})                 │
-│ qm2mod.ko   (hwmon "qm2", leds qm2-N:{red,green}:slotM)  [Phase 4]   │
+│ qm2mod.ko   (hwmon "qm2", leds qm2-N:{red,green}:slotM)  [fan P1/LED P2]│
 │ coretemp / k10temp / nvme hwmon · smartctl                            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -123,11 +128,13 @@ subset so that each form page posts only its own fields.
 | `use{cpu,system,disk,nvme}` | bool / true | Fan | 1 |
 | `{cpu,sys,disk,nvme}{low,high}` | °C | Fan (custom) | 1 |
 | `diskinterval` | 10–3600 s / 60 | Fan | 1 |
+| `useqm2` | bool / true — drive QM2 card fans | Fan | 1 (7.0~alpha2) |
 | `ledstatus` | bool / true | Hardware | 1 |
 | `ledbrightness` | 0–100 / 100 | Hardware | 1 |
 | `powerrecovery` | unchanged\|off\|on\|last | Hardware | 1 |
 | `eupmode` | unchanged\|off\|on | Hardware | 1 |
 | `loadmodule`, `skiphwcheck` | bool / false | Hardware | 1 |
+| `loadqm2` | bool / false — load `qm2mod` at boot | Hardware | 1 (7.0~alpha2) |
 | `rebootefi` | bool / false | Hardware | 1 |
 | `leddisk` (activity/error/locate) | bool | Hardware | 2 |
 | `ledschedule` (night brightness + times) | | Hardware | 2 |
@@ -190,11 +197,35 @@ for 0–40 °C ambient. Disks are the thermally sensitive part of a NAS
 | Exception in a loop iteration | PWM 255 for that cycle, logged, loop continues |
 | Driver not loaded | daemon exits 1; systemd retries every 10 s, 5× per 5 min |
 | Sensor source missing | ignored if others work; all missing → 255 |
+| QM2 card: no slot/NVMe sensor | that card's fan → 255 + fault |
+
+QM2 card fans get the same failsafe (PWM 255) unless `useqm2` is off, in
+which case the plugin never writes to the card.
 
 Trade-off: disabling the plugin leaves the fan at full speed (loud) until
 reboot. That's deliberate — qnap8528 offers no way to give control back to
 the EC, and loud is better than cooked. The UI hint states this.
 *Open question:* add a user-chosen "speed when stopped" (default 255)?
+
+### 5.4 QM2 expansion cards (Phase 1, 7.0~alpha2)
+
+- Discovery: every hwmon named `qm2`, re-scanned each cycle, because
+  `qm2mod` may load after `qnapd`. Card identity is in `hwmonX/device/` (`qm2.N`: `model`, `serial`, `pic_version`).
+- Each card is a **separate fan zone** with its own PWM state, hysteresis
+  and rate limit. Its inputs are the card's slot sensors plus the NVMe SSDs
+  whose sysfs path is below the card's PCIe switch (found via the I2C
+  adapter number in the slot LED names). If the switch can't be found, all
+  NVMe SSDs count, which can only make the fan run faster.
+- Curve and critical limit: the NVMe ones (`nvmelow/high`, 75 °C), on the
+  active preset's PWM range. **To tune on hardware:** the stall PWM of the
+  card fan (it is a different, smaller fan from the chassis one).
+- The chassis zone still includes every NVMe SSD, since the chassis fan
+  exhausts the whole case.
+- Manual mode applies `manualpwm` to the cards as well.
+- Card fan at 0 RPM for 3 cycles at PWM ≥ 64 → fault → status LED red.
+- **To check on hardware:** whether `fan_default` gives temperature-driven
+  control. If it does, consider it as the "service stopped" behaviour for
+  cards (quieter than 255).
 
 ## 6. LED design
 
@@ -216,6 +247,12 @@ the EC, and loud is better than cooked. The UI hint states this.
 | USB device mounting / copying | `usb` blinking blue | brightness 1 + `timer` | 3 |
 | USB device mounted | `usb` solid | brightness 1 | 3 |
 | Brightness / night schedule | all LEDs | `panel_brightness` 0–100 | 1 ✅ / 2 (schedule) |
+| QM2 SSD present | `qm2-A:green:slotN` | brightness 1 | 2 |
+| QM2 SSD error (SMART critical warning) | `qm2-A:red:slotN` | brightness 1 | 2 |
+| QM2 locate | `qm2-A:red:slotN` | brightness 2 (PIC blink) | 2 |
+
+qm2mod LEDs differ from qnap8528: one LED per colour, red `2` = PIC blink,
+green `1` and `2` are both solid. Panel brightness does not apply to them.
 
 Status priority (highest wins): error (solid red) > degraded (red blink) >
 rebuilding (bicolour) > starting (green blink) > ok (green). Mirrors
@@ -233,6 +270,10 @@ qnap8528's `examples/qnap-set-status.sh`.
   `examples/qnap-disk-led-monitor.sh`) in a separate thread — **not**
   `disk-activity` trigger (that's global, not per disk).
 - SMART health: reuse the disk poll (`smartctl -H`, standby-aware).
+- QM2 slot ↔ NVMe mapping: the switch's downstream port order (`lspci -tv`)
+  vs slot numbering, with qm2mod's slot-swap correction on generic 2P
+  cards. Must be verified on hardware (insert one SSD, see which green LED
+  is right).
 
 ## 7. Buttons design (Phase 3)
 
@@ -320,8 +361,9 @@ user, not just the LED. Options, in order of preference:
   fan vs disk fans on TS-x73A / TVS models).
 - Models needing `skip_hw_check`: TS-253D, TS-453D, TS-464, TS-464EU,
   TR-464, Qu-X05 (ENE EC) — called out in the UI hint.
-- QM2 cards (Phase 4): read `qm2` hwmon temps as an extra source and drive
-  its own `pwm1` from the same curve; slot LEDs from NVMe health.
+- QM2 cards: fan zone per card (Phase 1, §5.4); slot LEDs from NVMe
+  presence/health (Phase 2). The QM2-2S10G1TB02 is not supported by
+  qm2mod (EC-attached), so it will not show up.
 - Unknown models: qnap8528 refuses to load → UI shows driver not loaded;
   point the user to qnap8528's issue tracker.
 
@@ -343,6 +385,9 @@ user, not just the LED. Options, in order of preference:
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
       OMV spindown enabled)
 - [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink
+- [x] QM2 card fan zones (qm2mod), `loadqm2`, Hardware page card info
+- [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
+      and stall point, failsafe, what `fan_default` does
 - [ ] Test on OMV 8 (Trixie)
 - [ ] GitHub Actions: build .deb in `debian:bookworm` + `debian:trixie`,
       run unit tests, lintian, `php -l`
@@ -350,6 +395,7 @@ user, not just the LED. Options, in order of preference:
 ### Phase 2 — QTS-like LEDs & health
 - [ ] mdstat → status LED (degraded/rebuild), volume-full check
 - [ ] Disk slot mapping + present/error/activity LEDs, Locate action in UI
+- [ ] QM2 slot LEDs (present / error / locate) from NVMe mapping + health
 - [ ] LED brightness night schedule
 - [ ] OMV notifications for faults
 - [ ] Optional per-PWM-group curves for multi-fan models
@@ -365,7 +411,6 @@ user, not just the LED. Options, in order of preference:
 - [ ] Package `qnap8528-dkms` / `qm2mod-dkms` (or vendor DKMS sources) and
       make the plugin depend/recommend them; install headers automatically
       (`linux-headers-amd64` or `proxmox-headers-*` for the OMV Proxmox kernel)
-- [ ] QM2 temperatures / fan / slot LEDs
 - [ ] Upstream contributions to qnap8528 if needed (README button table fix,
       buzzer support, EC auto-fan restore)
 
@@ -388,6 +433,7 @@ user, not just the LED. Options, in order of preference:
 | EC power-on fan behaviour unknown before the daemon starts | Daemon starts early (`After=systemd-modules-load`); observe on hardware |
 | Button mapping disagreement (README vs source) | Verify with `evtest`; report upstream |
 | Disk-slot ↔ `/dev/sdX` mapping unknown | Discover via ATA port; config override |
+| QM2 card fan needs a different minimum PWM than the chassis fan | Measure on hardware; per-zone `minpwm` if needed |
 | `smartctl` cost on many-bay units | Separate `diskinterval`, standby-aware; consider `drivetemp` hwmon as an option |
 | qnap8528 not packaged; kernel upgrades need DKMS rebuild | Recommend dkms + headers; Phase 4 packaging |
 | Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |

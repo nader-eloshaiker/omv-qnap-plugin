@@ -72,6 +72,16 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$result['leds'] = implode(", ", $info['leds'] ?? []);
 		$result['rebootefiactive'] = !empty($info['reboot_efi']) ?
 			gettext("Yes") : gettext("No");
+		$cards = array_map(function($card) {
+			return sprintf("%s (%s, PIC %s)", $card['model'] ?? "",
+				$card['name'] ?? "", $card['pic_version'] ?? "?");
+		}, $info['qm2'] ?? []);
+		if (!empty($cards)) {
+			$result['qm2cards'] = implode(", ", $cards);
+		} else {
+			$result['qm2cards'] = !empty($info['qm2_loaded']) ?
+				gettext("None found") : gettext("qm2mod driver not loaded");
+		}
 		return $result;
 	}
 

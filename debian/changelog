@@ -1,3 +1,12 @@
+openmediavault-qnap (7.0~alpha2) stable; urgency=low
+
+  * Fan control for QM2 expansion cards via the qnap-qm2 (qm2mod) driver:
+    one fan zone per card driven by its slot and NVMe sensors, included in
+    the failsafe, status page and dashboard.
+  * Optionally load qm2mod at boot.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Fri, 16 Oct 2026 22:25:02 +1100
+
 openmediavault-qnap (7.0~alpha1) stable; urgency=low
 
   * Initial development release: fan control, status LED, panel

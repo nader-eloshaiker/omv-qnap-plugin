@@ -179,6 +179,94 @@ class TestDaemon(FakeSysfs):
         self.assertEqual(self.daemon().run(), 1)
 
 
+def link(root, rel, target):
+    """Create root/rel as a symlink to root/target (a directory)."""
+    os.makedirs(os.path.join(root, target), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+    os.symlink(os.path.join(root, target), os.path.join(root, rel))
+
+
+class FakeQm2(FakeSysfs):
+    """TS-253D plus a QM2-2P10G1TB with one NVMe SSD; a second NVMe SSD
+    sits elsewhere on the PCI bus."""
+
+    SWITCH = "devices/pci0000:00/0000:00:13.0/0000:01:00.0"
+
+    def setUp(self):
+        super().setUp()
+        card = "devices/platform/qm2.0"
+        put(self.root, card + "/model", "QM2-2P10G1TB\n")
+        put(self.root, card + "/pic_version", "0.10\n")
+        self.qm2 = card + "/hwmon/hwmon5"
+        put(self.root, self.qm2 + "/name", "qm2")
+        put(self.root, self.qm2 + "/temp1_input", "45000")
+        put(self.root, self.qm2 + "/temp2_input", "0")  # empty slot
+        put(self.root, self.qm2 + "/fan1_input", "1800")
+        put(self.root, self.qm2 + "/pwm1", "100")
+        link(self.root, self.qm2 + "/device", card)
+        link(self.root, "class/hwmon/hwmon5", self.qm2)
+        for led in ("qm2-7:red:slot1", "qm2-7:green:slot1"):
+            led_dir = card + "/leds/" + led
+            put(self.root, led_dir + "/brightness", "0")
+            link(self.root, led_dir + "/device", card)
+            link(self.root, "class/leds/" + led, led_dir)
+        link(self.root, "bus/i2c/devices/i2c-7", self.SWITCH + "/i2c-7")
+        for n, parent, temp in (
+                (6, self.SWITCH + "/0000:02:01.0/0000:03:00.0", 50000),
+                (7, "devices/pci0000:00/0000:00:17.0", 70000)):
+            hwmon = "%s/nvme/nvme%d/hwmon%d" % (parent, n - 6, n)
+            put(self.root, hwmon + "/name", "nvme")
+            put(self.root, hwmon + "/temp1_input", temp)
+            link(self.root, "class/hwmon/hwmon%d" % n, hwmon)
+
+
+class TestQm2(FakeQm2):
+    def daemon(self, **raw):
+        raw.update({"usedisk": False, "fanmode": "normal"})
+        return qnapd.Daemon(qnapd.Settings(raw))
+
+    def test_discovery(self):
+        card, = qnapd.Hardware.qm2_cards()
+        self.assertEqual(card.name, "qm2.0")
+        self.assertEqual(card.label, "QM2-2P10G1TB")
+        self.assertEqual([t for _, _, t in card.temps()], [45.0])
+        self.assertEqual(card.pci_path(),
+                         os.path.realpath(os.path.join(self.root,
+                                                       self.SWITCH)))
+
+    def test_card_fan_follows_its_own_sensors(self):
+        status = self.daemon().step(now=0)
+        # Slot 45 / NVMe-on-card 50 on the normal NVMe curve (45-65,
+        # 64-255); the off-card SSD at 70 must not count.
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "112")
+        self.assertEqual(status["qm2"], {"qm2.0": 112})
+        labels = {r["label"] for r in status["rows"]}
+        self.assertIn("QM2-2P10G1TB fan", labels)
+        self.assertIn("QM2-2P10G1TB slot 1", labels)
+        # The chassis zone still sees every NVMe SSD (70 >= 65).
+        self.assertEqual(status["pwm"], 255)
+
+    def test_card_left_alone_when_disabled(self):
+        status = self.daemon(useqm2=False).step(now=0)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+        self.assertEqual(status["qm2"], {"qm2.0": 100})
+
+    def test_card_fan_failure(self):
+        put(self.root, self.qm2 + "/fan1_input", "0")
+        d = self.daemon()
+        for i in range(qnapd.FAN_FAULT_CYCLES):
+            status = d.step(now=i)
+        self.assertIn("qm2.0-fan1 not spinning", status["faults"])
+
+    def test_failsafe_includes_card(self):
+        qnapd.failsafe("signal", qm2=True)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "255")
+
+    def test_failsafe_skips_card_when_disabled(self):
+        qnapd.failsafe("signal", qm2=False)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+
+
 class TestInfo(FakeSysfs):
     def info(self, cmdline):
         import contextlib, io

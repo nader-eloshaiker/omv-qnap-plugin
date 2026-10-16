@@ -116,6 +116,10 @@
 			"maximum": 110,
 			"default": 65
 		},
+		"useqm2": {
+			"type": "boolean",
+			"default": true
+		},
 		"ledstatus": {
 			"type": "boolean",
 			"default": true
@@ -141,6 +145,10 @@
 			"default": false
 		},
 		"skiphwcheck": {
+			"type": "boolean",
+			"default": false
+		},
+		"loadqm2": {
 			"type": "boolean",
 			"default": false
 		},

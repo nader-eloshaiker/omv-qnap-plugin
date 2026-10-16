@@ -76,7 +76,8 @@ PRESETS = {
     },
 }
 # Above these temperatures the fans always run at full speed.
-CRITICAL = {"cpu": 90, "system": 55, "disk": 55, "nvme": 75}
+# QM2 card slot sensors use the NVMe limits and curve.
+CRITICAL = {"cpu": 90, "system": 55, "disk": 55, "nvme": 75, "qm2": 75}
 
 log = logging.getLogger("qnapd")
 
@@ -176,6 +177,9 @@ class Settings:
             lo = self._pwm(raw.get("minpwm"), 64)
             hi = self._pwm(raw.get("maxpwm"), 255)
             self.pwm_range = (min(lo, hi), max(lo, hi))
+        # QM2 cards: each card fan follows its own slot and NVMe sensors.
+        self.use["qm2"] = to_bool(raw.get("useqm2", True))
+        self.ranges["qm2"] = self.ranges["nvme"]
 
     @staticmethod
     def _pwm(value, default):
@@ -264,14 +268,82 @@ class Hardware:
                     return [("cpu", best[1] or "CPU", best[2])]
         return []
 
-    def nvme_temps(self):
+    def nvme_temps(self, under=None):
+        """NVMe temperatures, optionally only below a sysfs device path."""
         result = []
         for i, hwmon in enumerate(find_hwmon("nvme")):
+            if under and not os.path.realpath(hwmon).startswith(
+                    under + os.sep):
+                continue
             temps = self._temps(hwmon, "t")
             # temp1 is the "Composite" temperature.
             if temps:
                 result.append(("nvme%d" % i, "NVMe %d" % i, temps[0][2]))
         return result
+
+    @staticmethod
+    def qm2_cards():
+        # Rediscovered on every call: qm2mod may be loaded after qnapd.
+        return [Qm2Card(hwmon) for hwmon in find_hwmon("qm2")]
+
+
+class Qm2Card:
+    """A QM2 PCIe expansion card driven by qm2mod
+    (https://github.com/0xGiddi/qnap-qm2).
+
+    The hwmon device is a child of the card's platform device
+    /sys/devices/platform/qm2.N, which holds model/serial/pic_version.
+    """
+
+    def __init__(self, hwmon):
+        self.hwmon = hwmon
+        self.device = os.path.realpath(os.path.join(hwmon, "device"))
+        self.name = os.path.basename(self.device)
+
+    def attr(self, name):
+        return read(os.path.join(self.device, name))
+
+    @property
+    def label(self):
+        return self.attr("model") or self.name
+
+    def leds(self):
+        return [p for p in sorted(glob.glob(sysfs("class", "leds",
+                                                  "qm2-*:*:slot*")))
+                if os.path.realpath(os.path.join(p, "device")) ==
+                self.device]
+
+    def pci_path(self):
+        """sysfs path of the card's PCIe switch, or None.
+
+        qm2mod's I2C adapter is a child of the switch, and the adapter
+        number is part of every slot LED name (qm2-<adapter>:<colour>:...).
+        """
+        for led in self.leds():
+            adapter = os.path.basename(led).split(":")[0][len("qm2-"):]
+            path = sysfs("bus", "i2c", "devices", "i2c-" + adapter)
+            if os.path.exists(path):
+                return os.path.dirname(os.path.realpath(path))
+        return None
+
+    def fan(self):
+        return {"name": self.name + "-fan1",
+                "rpm": read_int(os.path.join(self.hwmon, "fan1_input"))}
+
+    def read_pwm(self):
+        return read_int(os.path.join(self.hwmon, "pwm1"))
+
+    def set_pwm(self, value):
+        write(os.path.join(self.hwmon, "pwm1"),
+              min(PWM_MAX, max(0, int(value))))
+
+    def temps(self):
+        """One sensor per M.2 slot; empty slots read implausible values."""
+        lo, hi = PLAUSIBLE_TEMP
+        return [("%s-slot%d" % (self.name, index_of(name, "temp")),
+                 "%s slot %d" % (self.label, index_of(name, "temp")), t)
+                for name, _, t in Hardware._temps(self.hwmon, "temp")
+                if lo <= t <= hi]
 
 
 class DiskTemps:
@@ -416,6 +488,11 @@ class FanCurve:
 # Daemon
 # --------------------------------------------------------------------------
 
+def temp_row(source, name, label, value):
+    return {"type": "temperature", "source": source, "name": name,
+            "label": label or name, "value": round(value, 1), "unit": "°C"}
+
+
 def collect(hw, settings, disks=None, now=None):
     """Return ({source: [temps]}, [rows]) for the enabled sources."""
     now = time.monotonic() if now is None else now
@@ -427,25 +504,49 @@ def collect(hw, settings, disks=None, now=None):
     }
     readings = {src: [t for _, _, t in values]
                 for src, values in sensors.items()}
-    rows = []
-    for src in SOURCES:
-        for name, label, t in sensors[src]:
-            rows.append({"type": "temperature", "source": src, "name": name,
-                         "label": label or name, "value": round(t, 1),
-                         "unit": "°C"})
+    rows = [temp_row(src, name, label, t)
+            for src in SOURCES for name, label, t in sensors[src]]
     return readings, rows
 
 
-def build_status(hw, rows, pwm, mode, reason, faults, running):
-    fan_rows = [{"type": "fan", "source": "fan", "name": f["name"],
-                 "label": f["name"],
-                 "value": f["rpm"] if f["rpm"] is not None else "n/a",
-                 "unit": "RPM"} for f in hw.fans()]
-    pwm_rows = []
-    if pwm is not None:
-        pwm_rows.append({"type": "pwm", "source": "fan", "name": "pwm",
-                         "label": "Fan duty", "unit": "%",
-                         "value": int(round(pwm * 100.0 / PWM_MAX))})
+def collect_cards(hw):
+    """Return [(card, [temps], [rows])] for every QM2 card.
+
+    A card's temperatures are its slot sensors plus the NVMe SSDs behind
+    its PCIe switch (all NVMe SSDs if the switch cannot be identified).
+    """
+    result = []
+    for card in hw.qm2_cards():
+        sensors = card.temps()
+        nvme = hw.nvme_temps(under=card.pci_path())
+        temps = [t for _, _, t in sensors] + [t for _, _, t in nvme]
+        rows = [temp_row("qm2", name, label, t)
+                for name, label, t in sensors]
+        result.append((card, temps, rows))
+    return result
+
+
+def fan_row(source, name, label, rpm):
+    return {"type": "fan", "source": source, "name": name, "label": label,
+            "value": rpm if rpm is not None else "n/a", "unit": "RPM"}
+
+
+def pwm_row(name, label, pwm):
+    return {"type": "pwm", "source": "fan", "name": name, "label": label,
+            "unit": "%", "value": int(round(pwm * 100.0 / PWM_MAX))}
+
+
+def build_status(hw, rows, pwm, mode, reason, faults, running, cards=()):
+    """cards: [(Qm2Card, pwm or None)]."""
+    fan_rows = [fan_row("fan", f["name"], f["name"], f["rpm"])
+                for f in hw.fans()]
+    pwm_rows = [pwm_row("pwm", "Fan duty", pwm)] if pwm is not None else []
+    for card, card_pwm in cards:
+        fan_rows.append(fan_row("qm2", card.name + "-fan1",
+                                card.label + " fan", card.fan()["rpm"]))
+        if card_pwm is not None:
+            pwm_rows.append(pwm_row(card.name + "-pwm",
+                                    card.label + " fan duty", card_pwm))
     return {
         "timestamp": time.time(),
         "running": running,
@@ -454,6 +555,7 @@ def build_status(hw, rows, pwm, mode, reason, faults, running):
         "pwm": pwm,
         "reason": reason,
         "faults": faults,
+        "qm2": {card.name: card_pwm for card, card_pwm in cards},
         "rows": fan_rows + pwm_rows + rows,
     }
 
@@ -470,6 +572,15 @@ def write_status(status):
         log.warning("Failed to write status file: %s", e)
 
 
+class Zone:
+    """PWM state of a set of fans driven together (chassis or a QM2 card)."""
+
+    def __init__(self, name):
+        self.name = name
+        self.pwm = None
+        self.last_write = 0.0
+
+
 class Daemon:
     def __init__(self, settings):
         self.settings = settings
@@ -478,17 +589,17 @@ class Daemon:
         self.disks = DiskTemps(settings.diskinterval) \
             if settings.use["disk"] else None
         self.led = StatusLed()
-        self.pwm = None
-        self.last_write = 0.0
+        self.chassis = Zone("chassis")
+        self.cards = {}
         self.zero_rpm = {}
         self.stop = threading.Event()
 
-    def check_fans(self, pwm):
+    def check_fans(self, fans, pwm):
         faults = []
-        for fan in self.hw.fans():
+        for fan in fans:
             name = fan["name"]
-            if fan["rpm"] is None or (fan["rpm"] == 0 and
-                                      (pwm or 0) >= FAN_FAULT_MIN_PWM):
+            if fan["rpm"] is None or fan["rpm"] >= 65535 or \
+                    (fan["rpm"] == 0 and (pwm or 0) >= FAN_FAULT_MIN_PWM):
                 self.zero_rpm[name] = self.zero_rpm.get(name, 0) + 1
             else:
                 self.zero_rpm[name] = 0
@@ -496,38 +607,64 @@ class Daemon:
                 faults.append("%s not spinning" % name)
         return faults
 
+    def decide(self, zone, readings):
+        """Return (pwm, reason, faults) for one zone."""
+        src = self.curve.critical(readings)
+        if self.settings.fanmode == "manual":
+            if src:
+                return PWM_MAX, "critical %s temperature" % src, []
+            return self.settings.manualpwm, "manual", []
+        if not any(temps for src, temps in readings.items()
+                   if self.settings.use.get(src)):
+            return PWM_MAX, "no temperature sensors", \
+                ["no temperature sensors"]
+        pwm, reason = self.curve.next_pwm(zone.pwm, readings)
+        return pwm, reason, []
+
+    def apply(self, zone, pwm, reason, setter, now):
+        """Write the PWM when changed (or periodically); return faults."""
+        if pwm == zone.pwm and now - zone.last_write < PWM_REFRESH_SECONDS:
+            return []
+        try:
+            setter(pwm)
+        except OSError as e:
+            log.error("Failed to set %s PWM: %s", zone.name, e)
+            return ["cannot set %s fan speed" % zone.name]
+        if pwm != zone.pwm:
+            log.info("%s PWM %s -> %d (%s)", zone.name, zone.pwm, pwm,
+                     reason)
+        zone.pwm = pwm
+        zone.last_write = now
+        return []
+
     def step(self, now=None):
         now = time.monotonic() if now is None else now
-        faults = []
         readings, rows = collect(self.hw, self.settings, self.disks, now)
-        if self.settings.fanmode == "manual":
-            pwm, reason = self.settings.manualpwm, "manual"
-            src = self.curve.critical(readings)
-            if src:
-                pwm, reason = PWM_MAX, "critical %s temperature" % src
-        elif not any(readings[src] for src in SOURCES
-                     if self.settings.use[src]):
-            pwm, reason = PWM_MAX, "no temperature sensors"
-            faults.append(reason)
-        else:
-            pwm, reason = self.curve.next_pwm(self.pwm, readings)
+        pwm, reason, faults = self.decide(self.chassis, readings)
+        faults += self.apply(self.chassis, pwm, reason, self.hw.set_pwm, now)
+        faults += self.check_fans(self.hw.fans(), self.chassis.pwm)
 
-        if pwm != self.pwm or now - self.last_write >= PWM_REFRESH_SECONDS:
-            try:
-                self.hw.set_pwm(pwm)
-                if pwm != self.pwm:
-                    log.info("PWM %s -> %d (%s)", self.pwm, pwm, reason)
-                self.pwm = pwm
-                self.last_write = now
-            except OSError as e:
-                faults.append("cannot set fan speed")
-                log.error("Failed to set PWM: %s", e)
+        cards = []
+        for card, temps, card_rows in collect_cards(self.hw):
+            rows += card_rows
+            if not self.settings.use["qm2"]:
+                # Leave the card fan to its PIC; just report it.
+                cards.append((card, card.read_pwm()))
+                continue
+            zone = self.cards.setdefault(card.name, Zone(card.name))
+            card_pwm, card_reason, card_faults = self.decide(
+                zone, {"qm2": temps})
+            faults += ["%s: %s" % (card.name, f) for f in card_faults]
+            faults += self.apply(zone, card_pwm, card_reason, card.set_pwm,
+                                 now)
+            faults += self.check_fans([card.fan()], zone.pwm)
+            cards.append((card, zone.pwm))
 
-        faults += self.check_fans(self.pwm)
         if self.settings.ledstatus:
             self.led.set("fault" if faults else "ok")
-        status = build_status(self.hw, rows, self.pwm,
-                              self.settings.fanmode, reason, faults, True)
+        status = build_status(self.hw, rows, self.chassis.pwm,
+                              self.settings.fanmode, reason, faults, True,
+                              cards)
         write_status(status)
         return status
 
@@ -541,26 +678,39 @@ class Daemon:
         if self.settings.ledstatus:
             self.led.set("starting")
         set_panel_brightness(self.settings.ledbrightness)
-        log.info("Started (mode=%s, interval=%ds)", self.settings.fanmode,
-                 self.settings.interval)
+        log.info("Started (mode=%s, interval=%ds, QM2 cards: %s)",
+                 self.settings.fanmode, self.settings.interval,
+                 ", ".join(c.name for c in self.hw.qm2_cards()) or "none")
         while not self.stop.is_set():
             try:
                 self.step()
             except Exception:  # Never leave the fan at a low speed.
                 log.exception("Control loop failed, fans to full speed")
-                failsafe()
+                failsafe(qm2=self.settings.use["qm2"])
             self.stop.wait(self.settings.interval)
         log.info("Stopping")
         return 0
 
 
-def failsafe(service_result=None):
-    """Drive all fans to full speed; flag the status LED on failure."""
+def failsafe(service_result=None, qm2=None):
+    """Drive all fans to full speed; flag the status LED on failure.
+
+    QM2 card fans are included unless the user left them to the card
+    (useqm2 off). qm2mod's fan_default is not used: it is unknown whether
+    the PIC's default is temperature controlled.
+    """
+    if qm2 is None:
+        qm2 = load_settings_or_default().use["qm2"]
     hw = Hardware()
     try:
         hw.set_pwm(PWM_MAX)
     except OSError as e:
         log.error("Failsafe could not set PWM: %s", e)
+    for card in hw.qm2_cards() if qm2 else []:
+        try:
+            card.set_pwm(PWM_MAX)
+        except OSError as e:
+            log.error("Failsafe could not set %s PWM: %s", card.name, e)
     if service_result not in (None, "", "success"):
         StatusLed().set("warning")
     return 0
@@ -596,8 +746,12 @@ def cmd_status(args):
         # Daemon not running: read live, without waking disks via smartctl.
         hw = Hardware()
         _, rows = collect(hw, settings)
+        cards = []
+        for card, _, card_rows in collect_cards(hw):
+            rows += card_rows
+            cards.append((card, card.read_pwm()))
         status = build_status(hw, rows, hw.read_pwm(), settings.fanmode,
-                              None, [], False)
+                              None, [], False, cards)
     if args.json:
         print(json.dumps(status))
     else:
@@ -624,6 +778,13 @@ def cmd_info(args):
             os.environ.get("QNAPD_CMDLINE", "/proc/cmdline")) or "").split(),
         "leds": sorted(os.path.basename(p)[len(DRIVER) + 2:] for p in
                        glob.glob(sysfs("class", "leds", DRIVER + "::*"))),
+        "qm2_loaded": os.path.isdir(sysfs("module", "qm2mod")),
+        "qm2": [{"name": card.name, "model": card.attr("model"),
+                 "serial": card.attr("serial"),
+                 "pic_version": card.attr("pic_version"),
+                 "pci": card.pci_path(),
+                 "leds": [os.path.basename(p) for p in card.leds()]}
+                for card in Hardware.qm2_cards()],
     }
     print(json.dumps(info) if args.json else
           "\n".join("%s: %s" % kv for kv in info.items()))

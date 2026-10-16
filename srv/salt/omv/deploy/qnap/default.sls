@@ -18,9 +18,14 @@
 {% set power_recovery = {'off': 0, 'on': 1, 'last': 2} %}
 {% set eup_mode = {'off': 0, 'on': 1} %}
 
-# Kernel module loading. The qnap8528 driver itself is installed by the
-# user (DKMS); the plugin only manages how it is loaded.
-{% if config.loadmodule | to_bool %}
+# Kernel module loading. The drivers themselves (qnap8528, and qm2mod for
+# QM2 cards) are installed by the user (DKMS); the plugin only manages how
+# they are loaded.
+{% set modules = [] %}
+{% if config.loadmodule | to_bool %}{% set _ = modules.append('qnap8528') %}{% endif %}
+{% if config.loadqm2 | to_bool %}{% set _ = modules.append('qm2mod') %}{% endif %}
+
+{% if modules %}
 
 configure_qnap_modules_load:
   file.managed:
@@ -28,10 +33,22 @@ configure_qnap_modules_load:
     - contents: |
         {{ pillar['headers']['auto_generated'] }}
         {{ pillar['headers']['warning'] }}
-        qnap8528
+        {%- for module in modules %}
+        {{ module }}
+        {%- endfor %}
     - user: root
     - group: root
     - mode: '0644'
+
+{% else %}
+
+remove_qnap_modules_load:
+  file.absent:
+    - name: "/etc/modules-load.d/openmediavault-qnap.conf"
+
+{% endif %}
+
+{% if config.loadmodule | to_bool %}
 
 configure_qnap_modprobe:
   file.managed:
@@ -44,24 +61,24 @@ configure_qnap_modprobe:
     - group: root
     - mode: '0644'
 
-load_qnap_module:
-  cmd.run:
-    - name: "modprobe qnap8528"
-    - unless: "test -d /sys/module/qnap8528"
-    - require:
-      - file: configure_qnap_modprobe
-
 {% else %}
-
-remove_qnap_modules_load:
-  file.absent:
-    - name: "/etc/modules-load.d/openmediavault-qnap.conf"
 
 remove_qnap_modprobe:
   file.absent:
     - name: "/etc/modprobe.d/openmediavault-qnap.conf"
 
 {% endif %}
+
+{% for module in modules %}
+load_qnap_module_{{ module }}:
+  cmd.run:
+    - name: "modprobe {{ module }}"
+    - unless: "test -d /sys/module/{{ module }}"
+{%- if module == 'qnap8528' %}
+    - require:
+      - file: configure_qnap_modprobe
+{%- endif %}
+{% endfor %}
 
 # One-shot EC settings, persisted by the EC itself.
 {% if config.powerrecovery in power_recovery %}

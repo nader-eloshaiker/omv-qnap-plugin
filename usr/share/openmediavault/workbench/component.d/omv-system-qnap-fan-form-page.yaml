@@ -90,6 +90,11 @@ data:
         name: usenvme
         label: _("NVMe SSDs")
         value: true
+      - type: checkbox
+        name: useqm2
+        label: _("Control QM2 expansion card fans")
+        value: true
+        hint: _("Requires the qm2mod driver. Each card fan follows the card's M.2 slot sensors and the NVMe SSDs on that card, using the NVMe temperatures. When unticked the card fan is left to the card.")
       - type: divider
         title: _("Custom curve")
         modifiers:

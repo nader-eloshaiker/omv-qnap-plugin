@@ -24,7 +24,8 @@
 				"diskinterval": { "type": "integer", "minimum": 10, "maximum": 3600, "required": true },
 				"usenvme": { "type": "boolean", "required": true },
 				"nvmelow": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
-				"nvmehigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true }
+				"nvmehigh": { "type": "integer", "minimum": 0, "maximum": 110, "required": true },
+				"useqm2": { "type": "boolean", "required": true }
 			}
 		}
 	},
@@ -40,6 +41,7 @@
 				"eupmode": { "type": "string", "enum": ["unchanged", "off", "on"], "required": true },
 				"loadmodule": { "type": "boolean", "required": true },
 				"skiphwcheck": { "type": "boolean", "required": true },
+				"loadqm2": { "type": "boolean", "required": true },
 				"rebootefi": { "type": "boolean", "required": true }
 			}
 		}

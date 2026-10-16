@@ -49,6 +49,16 @@ data:
               operator: truthy
               arg0:
                 prop: loadmodule
+      - type: textInput
+        name: qm2cards
+        label: _("QM2 expansion cards")
+        readonly: true
+        submitValue: false
+      - type: checkbox
+        name: loadqm2
+        label: _("Load the qm2mod module at boot")
+        value: false
+        hint: _("For QM2 cards, using the qnap-qm2 driver (https://github.com/0xGiddi/qnap-qm2), which must already be installed.")
       - type: divider
         title: _("Front panel")
       - type: checkbox
