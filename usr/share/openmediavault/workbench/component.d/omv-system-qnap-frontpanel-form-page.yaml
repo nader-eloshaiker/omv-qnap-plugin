@@ -15,7 +15,7 @@ data:
         name: ledstatus
         label: _("Drive the status LED")
         value: true
-        hint: _("Green when healthy, red on a fan or sensor fault, blinking red if the service fails.")
+        hint: _("Green when healthy. Solid red on a fan or sensor fault, a failed pool or a full volume; blinking red if a pool or RAID array is degraded or the service fails; green and red alternating while a pool resilvers or an array rebuilds. A scrub does not change it.")
       - type: checkbox
         name: leddisk
         label: _("Drive the disk LEDs")
@@ -27,6 +27,16 @@ data:
         value: 100
         validators:
           min: 0
+          max: 100
+          patternType: integer
+          required: true
+      - type: numberInput
+        name: volumefull
+        label: _("Volume full warning (%)")
+        value: 95
+        hint: _("The status LED turns red when a ZFS pool or a mounted filesystem is at least this full.")
+        validators:
+          min: 50
           max: 100
           patternType: integer
           required: true

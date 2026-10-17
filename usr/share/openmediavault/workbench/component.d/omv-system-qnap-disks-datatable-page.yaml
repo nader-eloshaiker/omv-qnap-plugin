@@ -1,0 +1,67 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-disks-datatable-page
+  type: datatablePage
+  config:
+    autoReload: 5000
+    hasSearchField: false
+    selectionType: single
+    limit: 0
+    stateId: 6f0c3a52-1b7e-4d0a-9a51-8e2f6c4d7b19
+    store:
+      proxy:
+        service: Qnap
+        get:
+          method: getSlots
+    columns:
+      - name: _("Slot")
+        prop: label
+        flexGrow: 1
+      - name: _("Device")
+        prop: device
+        flexGrow: 1
+      - name: _("Model")
+        prop: model
+        flexGrow: 2
+      - name: _("Size")
+        prop: size_gb
+        flexGrow: 1
+        cellTemplateName: template
+        cellTemplateConfig: "{% if size_gb %}{{ size_gb }} GB{% endif %}"
+      - name: _("LED")
+        prop: state
+        flexGrow: 1
+      - name: _("Locate")
+        prop: locate
+        flexGrow: 1
+        cellTemplateName: checkIcon
+    actions:
+      - type: iconButton
+        icon: mdi:lightbulb-on-outline
+        tooltip: _("Locate (blink the LED red for 10 minutes)")
+        enabledConstraints:
+          minSelected: 1
+          maxSelected: 1
+        execute:
+          type: request
+          request:
+            service: Qnap
+            method: locate
+            params:
+              id: "{{ _selected[0].id }}"
+              enable: true
+      - type: iconButton
+        icon: mdi:lightbulb-off-outline
+        tooltip: _("Stop locating")
+        enabledConstraints:
+          minSelected: 1
+          maxSelected: 1
+        execute:
+          type: request
+          request:
+            service: Qnap
+            method: locate
+            params:
+              id: "{{ _selected[0].id }}"
+              enable: false

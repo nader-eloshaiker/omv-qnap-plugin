@@ -37,7 +37,19 @@
 			"properties": {
 				"ledstatus": { "type": "boolean", "required": true },
 				"leddisk": { "type": "boolean", "required": true },
-				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true }
+				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true },
+				"volumefull": { "type": "integer", "minimum": 50, "maximum": 100, "required": true }
+			}
+		}
+	},
+	{
+		"type": "rpc",
+		"id": "rpc.qnap.locate",
+		"params": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$", "required": true },
+				"enable": { "type": "boolean", "required": true }
 			}
 		}
 	},

@@ -134,6 +134,12 @@
 			"maximum": 100,
 			"default": 100
 		},
+		"volumefull": {
+			"type": "integer",
+			"minimum": 50,
+			"maximum": 100,
+			"default": 95
+		},
 		"powerrecovery": {
 			"type": "string",
 			"enum": ["unchanged", "off", "on", "last"],

@@ -20,7 +20,7 @@ Defaults live only in `usr/share/openmediavault/datamodels/conf.service.qnap.jso
 | Page | Fields | RPC setter |
 |-|-|-|
 | Fan control | `enable`, `interval`, `fanmode`, `manualpwm`, `minpwm`, `maxpwm`, `hysteresis`, `use{cpu,system,disk,nvme,qm2}`, `{cpu,sys,disk,nvme}{low,high}`, `diskinterval` | `setFanSettings` |
-| Front panel | `ledstatus`, `leddisk`, `ledbrightness` | `setFrontPanelSettings` |
+| Front panel | `ledstatus`, `leddisk`, `ledbrightness`, `volumefull` (8.0.2) | `setFrontPanelSettings` |
 | Power | `powerrecovery`, `eupmode`, `rebootefi` | `setPowerSettings` |
 | Drivers | `loadmodule`, `skiphwcheck`, `loadqm2` | `setDriverSettings` |
 
@@ -36,6 +36,8 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 | `getHardwareSettings` | admin | config + `driverstatus`, `leds`, `qm2cards`, `rebootefiactive` (Front panel, Power, Drivers pages) |
 | `getStatus` | admin | rows `{type, source, name, label, value, unit}` (Status page, fans & temperatures widget) |
 | `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page, device widget) |
+| `getSlots` | admin | bays and QM2 slots `{id, label, device, model, size_gb, state, locate, locate_until}` from the status file (Disks page) |
+| `locate` | admin | `{id, enable}`: starts (10 min) or stops a locate request in `/run/qnapd/locate.json`; rejects ids qnapd does not report |
 | `set*Settings` | admin | stores a subset |
 
 Reads shell out to `qnapd status|info --json` via `\OMV\System\Process`,
@@ -64,7 +66,7 @@ widget; OMV 8 has no generic Diagnostics › Services table).
 
 | File | Page |
 |-|-|
-| `navigation.d/system.qnap*.yaml` | System › QNAP tiles, ordered by `position` (Status 10, Fan control 20, Front panel 30, Power 40, Drivers 50, System 60) |
+| `navigation.d/system.qnap*.yaml` | System › QNAP tiles, ordered by `position` (Status 10, Fan control 20, Front panel 30, Disks 35, Power 40, Drivers 50, System 60) |
 | `route.d/system.qnap.*.yaml` | URLs `/system/qnap/<page>` |
 | `component.d/omv-system-qnap-*-page.yaml` | the pages (formPage / datatablePage) |
 | `dashboard.d/qnap.yaml` | fans & temperatures grid |

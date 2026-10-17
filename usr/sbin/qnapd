@@ -50,6 +50,10 @@ STATUS_FILE = os.environ.get("QNAPD_STATUS", "/run/qnapd/status.json")
 # Device identity never changes but VPD reads through the EC are slow
 # (~5 ms per byte), so it is cached for the boot (/run is a tmpfs).
 IDENTITY_FILE = os.environ.get("QNAPD_IDENTITY", "/run/qnapd.identity.json")
+# Locate requests from the web UI: {slot id: expiry (epoch seconds)}. The RPC
+# writes it; qnapd, the only hardware writer, applies it.
+LOCATE_FILE = os.environ.get("QNAPD_LOCATE", "/run/qnapd/locate.json")
+MOUNTS_FILE = "/proc/mounts"
 # qnap8528 logs the model it matched ("device model is TS-253D") but does
 # not export it in sysfs. dmesg first; the journal if the ring buffer wrapped.
 KERNEL_LOG_COMMANDS = (["dmesg"],
@@ -184,6 +188,7 @@ class Settings:
         self.leddisk = to_bool(raw.get("leddisk", True))
         self.ledbrightness = min(100, max(0, to_int(
             raw.get("ledbrightness"), 100)))
+        self.volumefull = min(100, max(50, to_int(raw.get("volumefull"), 95)))
         self.use = {src: to_bool(raw.get("use" + src, True))
                     for src in SOURCES}
         if self.fanmode in PRESETS:
@@ -515,18 +520,121 @@ def nvme_failed():
     return result
 
 
-def array_faults():
-    """Disks a ZFS pool or md array considers faulted, plus failing NVMe
-    SSDs. All read in-kernel or controller state, so sleeping disks are not
-    woken."""
-    result = md_faulty(read("/proc/mdstat") or "") | nvme_failed()
+def zfs_pools(list_text, status_text):
+    """{pool: (health, capacity %, resilvering)} from `zpool list -H -o
+    name,health,cap` and `zpool status`. A scrub is routine maintenance and
+    does not count."""
+    pools = {}
+    for line in list_text.splitlines():
+        fields = line.split()
+        if len(fields) >= 3:
+            pools[fields[0]] = [fields[1], to_int(fields[2].rstrip("%"), 0),
+                                False]
+    pool = None
+    for line in status_text.splitlines():
+        match = re.match(r"\s*pool:\s*(\S+)", line)
+        if match:
+            pool = match.group(1)
+        elif pool in pools and re.match(r"\s*scan:\s*resilver in progress",
+                                        line):
+            pools[pool][2] = True
+    return {name: tuple(v) for name, v in pools.items()}
+
+
+def md_arrays(text):
+    """{array: (degraded, rebuilding)} from /proc/mdstat. A rebuild, resync
+    or reshape counts; a check (md's scrub) does not."""
+    arrays = {}
+    array = None
+    for line in text.splitlines():
+        match = re.match(r"(md\S*)\s*:", line)
+        if match:
+            array = match.group(1)
+            arrays[array] = [False, False]
+        elif array:
+            if re.search(r"\[U*_[U_]*\]", line):
+                arrays[array][0] = True
+            if re.search(r"\b(recovery|resync|reshape)\s*=", line):
+                arrays[array][1] = True
+    return {name: tuple(v) for name, v in arrays.items()}
+
+
+# Local filesystems checked for "volume full"; ZFS comes from zpool list.
+FULL_FS_TYPES = ("ext2", "ext3", "ext4", "xfs", "btrfs", "jfs", "f2fs")
+
+
+def volume_usage(mounts_text):
+    """{mount point: used %} for local block filesystems, one per device.
+    statvfs is answered from the in-memory superblock: no disk I/O."""
+    usage, seen = {}, set()
+    for line in mounts_text.splitlines():
+        fields = line.split()
+        if len(fields) < 3 or fields[2] not in FULL_FS_TYPES or \
+                not fields[0].startswith("/dev/") or fields[0] in seen:
+            continue
+        seen.add(fields[0])
+        mount = fields[1].replace("\\040", " ")
+        try:
+            st = os.statvfs(mount)
+        except OSError:
+            continue
+        used = st.f_blocks - st.f_bfree
+        if used + st.f_bavail > 0:
+            usage[mount] = int(round(100.0 * used / (used + st.f_bavail)))
+    return usage
+
+
+def storage_state(pools, arrays, usage, full):
+    """(state, reasons) for the status LED, QTS style: "fault" (solid red)
+    for a failed pool or a volume at least `full` % used, "degraded" (red
+    blink), "rebuilding" (green/red), or "ok". The worst wins."""
+    found = {}
+    for name, (health, cap, resilvering) in sorted(pools.items()):
+        if health in ("FAULTED", "UNAVAIL", "SUSPENDED"):
+            found.setdefault("fault", []).append("%s %s" % (name, health))
+        elif resilvering:
+            found.setdefault("rebuilding", []).append(name + " resilvering")
+        elif health != "ONLINE":
+            found.setdefault("degraded", []).append("%s %s" % (name, health))
+        if cap >= full:
+            found.setdefault("fault", []).append("%s %d%% full" % (name, cap))
+    for name, (degraded, rebuilding) in sorted(arrays.items()):
+        if rebuilding:
+            found.setdefault("rebuilding", []).append(name + " rebuilding")
+        elif degraded:
+            found.setdefault("degraded", []).append(name + " degraded")
+    for mount, used in sorted(usage.items()):
+        if used >= full:
+            found.setdefault("fault", []).append("%s %d%% full" % (mount,
+                                                                 used))
+    for state in ("fault", "degraded", "rebuilding"):
+        if state in found:
+            return state, [r for s in ("fault", "degraded", "rebuilding")
+                           for r in found.get(s, [])]
+    return "ok", []
+
+
+def command_output(cmd):
     try:
-        proc = subprocess.run(["zpool", "status", "-LP"], capture_output=True,
-                              text=True, timeout=20)
-        result |= zfs_faulted(proc.stdout)
+        return subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
-        pass  # No ZFS.
-    return result
+        return ""  # e.g. no ZFS.
+
+
+def storage_health(full):
+    """(faulted disks, LED state, reasons) from ZFS pools, md arrays, NVMe
+    health and filesystem usage. All read in-kernel or controller state, so
+    sleeping disks are not woken."""
+    mdstat = read("/proc/mdstat") or ""
+    zstatus = command_output(["zpool", "status", "-LP"])
+    zlist = command_output(["zpool", "list", "-H", "-o", "name,health,cap"])
+    faulted = md_faulty(mdstat) | nvme_failed() | zfs_faulted(zstatus)
+    state, reasons = storage_state(zfs_pools(zlist, zstatus),
+                                   md_arrays(mdstat),
+                                   volume_usage(read(MOUNTS_FILE) or ""),
+                                   full)
+    return faulted, state, reasons
 
 
 PCI_ADDRESS = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
@@ -611,17 +719,20 @@ class DiskLeds:
         self.last_io = {}
         self.shown = {}
         self.swapped = {}
+        self.locate_cache = (None, {})
         self.stop = threading.Event()
         self.thread = None
         self.discover()
 
     def discover(self):
-        """[(kind, leds, disk)]; kind "bay" has (led,), "qm2" (green, red)."""
+        """[(kind, leds, disk, id)]; kind "bay" has (led,), "qm2" (green,
+        red); id is "bayN" or "<card>-slotN" (used by locate)."""
         slots = []
         for led in sorted(glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")),
                           key=lambda p: index_of(p, DRIVER + "::hdd")):
             port = index_of(led, DRIVER + "::hdd")
-            slots.append(("bay", (led,), self.disk_on_port(port)))
+            slots.append(("bay", (led,), self.disk_on_port(port),
+                          "bay%d" % port))
         for card in Hardware.qm2_cards():
             if card.name not in self.swapped:
                 self.swapped[card.name] = qm2_swapped(card)
@@ -632,7 +743,8 @@ class DiskLeds:
                 green = leds.get("%s:green:slot%d" % (prefix, n))
                 red = leds.get("%s:red:slot%d" % (prefix, n))
                 if green and red:
-                    slots.append(("qm2", (green, red), disk))
+                    slots.append(("qm2", (green, red), disk,
+                                  "%s-slot%d" % (card.name, n)))
         self.slots = slots
 
     @staticmethod
@@ -649,7 +761,31 @@ class DiskLeds:
         self.discover()
         self.errors = set(errors)
 
-    def state(self, dev, now):
+    def locate_requests(self):
+        """{slot id: expiry} from LOCATE_FILE, re-read when it changes."""
+        try:
+            mtime = os.stat(LOCATE_FILE).st_mtime
+        except OSError:
+            self.locate_cache = (None, {})
+            return {}
+        if mtime != self.locate_cache[0]:
+            try:
+                with open(LOCATE_FILE) as f:
+                    data = json.load(f)
+                requests = {str(k): float(v) for k, v in data.items()}
+            except (OSError, ValueError, TypeError, AttributeError):
+                requests = {}
+            self.locate_cache = (mtime, requests)
+        return self.locate_cache[1]
+
+    def locating(self):
+        """{slot id: expiry} still running (wall-clock expiry)."""
+        wall = time.time()
+        return {k: v for k, v in self.locate_requests().items() if v > wall}
+
+    def state(self, dev, now, locate=False):
+        if locate:
+            return "locate"
         if dev is None:
             return "off"
         if dev in self.errors:
@@ -677,12 +813,15 @@ class DiskLeds:
         if kind == "bay":
             led, = leds
             write(os.path.join(led, "brightness"),
-                  {"off": 0, "on": 1, "active": 1, "error": 2}[state])
-            if state == "active":
+                  {"off": 0, "on": 1, "active": 1, "error": 2,
+                   "locate": 2}[state])
+            if state in ("active", "locate"):  # Locate = blinking red.
                 self.blink(led)
             return
         green, red = leds
-        write(os.path.join(red, "brightness"), 1 if state == "error" else 0)
+        # qm2mod: red 2 makes the card's PIC blink it (locate).
+        write(os.path.join(red, "brightness"),
+              {"error": 1, "locate": 2}.get(state, 0))
         write(os.path.join(green, "brightness"),
               1 if state in ("on", "active") else 0)
         if state == "active":
@@ -690,8 +829,9 @@ class DiskLeds:
 
     def poll(self, now=None):
         now = time.monotonic() if now is None else now
-        for kind, leds, dev in self.slots:
-            state = self.state(dev, now)
+        locating = self.locating()
+        for kind, leds, dev, slot in self.slots:
+            state = self.state(dev, now, slot in locating)
             if self.shown.get(leds) == state:
                 continue
             try:
@@ -703,6 +843,31 @@ class DiskLeds:
                     self.shown[leds] = state
                 else:
                     log.warning("Cannot set %s: %s", leds[0], e)
+
+    def snapshot(self):
+        """Slots for the status file and the Disks page."""
+        locating = self.locating()
+        result = []
+        for kind, leds, dev, slot in list(self.slots):
+            n = slot.rsplit("slot", 1)[-1] if kind == "qm2" else slot[3:]
+            card = slot.split("-slot")[0] if kind == "qm2" else None
+            sectors = read(sysfs("block", dev, "size")) if dev else None
+            result.append({
+                "id": slot,
+                "label": ("Bay %s" % n) if kind == "bay" else
+                         ("%s slot %s" % (card, n)),
+                "device": dev or "",
+                "model": (read(sysfs("block", dev, "device", "model")) or
+                          read(sysfs("block", dev, "device", "device",
+                                     "model")) or "") if dev else "",
+                "size_gb": round(int(sectors) * 512 / 1e9)
+                           if sectors and sectors.isdigit() else None,
+                "state": self.shown.get(leds, "off"),
+                "locate": slot in locating,
+                "locate_until": int(locating[slot]) if slot in locating
+                                else None,
+            })
+        return result
 
     def start(self):
         def loop():
@@ -721,12 +886,21 @@ class DiskLeds:
         if self.thread:
             self.thread.join(2)
         now = time.monotonic()
-        for kind, leds, dev in self.slots:
+        for kind, leds, dev, _ in self.slots:
             state = self.state(dev, now)
             try:
                 self.show(kind, leds, "on" if state == "active" else state)
             except OSError:
                 pass
+
+
+def status_led_state(faults, storage):
+    """Fan/sensor faults and failed or full storage: solid red; a degraded
+    pool or array: blinking red; a rebuild: green/red; otherwise green."""
+    if faults or storage == "fault":
+        return "fault"
+    return {"degraded": "warning", "rebuilding": "rebuilding"}.get(storage,
+                                                                  "ok")
 
 
 class StatusLed:
@@ -738,6 +912,8 @@ class StatusLed:
         "starting": (1, True),
         "warning": (2, True),
         "fault": (2, False),
+        # Green/red alternating (EC bicolour blink), e.g. a RAID rebuild.
+        "rebuilding": (1, False),
     }
 
     def __init__(self, name="qnap8528::status"):
@@ -760,6 +936,17 @@ class StatusLed:
         except OSError as e:
             log.warning("Failed to set status LED to %s: %s", state, e)
             return
+        if state == "rebuilding":
+            try:
+                # Write-only; cancelled by the next brightness write.
+                write(os.path.join(self.path, "blink_bicolor"), 1)
+            except OSError:
+                # blink_sw_only, or an older driver: blink red instead.
+                try:
+                    write(os.path.join(self.path, "brightness"), 2)
+                    blink = True
+                except OSError as e:
+                    log.warning("Failed to set status LED: %s", e)
         if blink:
             try:
                 write(os.path.join(self.path, "trigger"), "timer")
@@ -912,8 +1099,9 @@ def pwm_row(name, label, pwm):
             "unit": "%", "value": int(round(pwm * 100.0 / PWM_MAX))}
 
 
-def build_status(hw, rows, pwm, mode, reason, faults, running, cards=()):
-    """cards: [(Qm2Card, pwm or None)]."""
+def build_status(hw, rows, pwm, mode, reason, faults, running, cards=(),
+                 storage=None, slots=()):
+    """cards: [(Qm2Card, pwm or None)]; storage: (state, reasons)."""
     fan_rows = [fan_row("fan", f["name"], f["name"], f["rpm"])
                 for f in hw.fans()]
     pwm_rows = [pwm_row("pwm", "Fan duty", pwm)] if pwm is not None else []
@@ -932,7 +1120,14 @@ def build_status(hw, rows, pwm, mode, reason, faults, running, cards=()):
         "reason": reason,
         "faults": faults,
         "qm2": {card.name: card_pwm for card, card_pwm in cards},
-        "rows": fan_rows + pwm_rows + rows,
+        "storage": {"state": storage[0], "reasons": storage[1]}
+                   if storage else None,
+        "slots": list(slots),
+        "rows": fan_rows + pwm_rows + rows + (
+            [{"type": "storage", "source": "storage", "name": "storage",
+              "label": "Storage", "unit": "",
+              "value": "; ".join(storage[1]) or storage[0]}]
+            if storage else []),
     }
 
 
@@ -968,7 +1163,8 @@ class Daemon:
         self.disks = DiskTemps(settings.diskinterval) \
             if settings.use["disk"] or settings.leddisk else None
         self.disk_leds = DiskLeds() if settings.leddisk else None
-        self.array_faults = (None, set())
+        # (last check, faulted disks, LED state, reasons), every diskinterval.
+        self.storage = (None, set(), "ok", [])
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
@@ -1070,24 +1266,28 @@ class Daemon:
             faults += self.check_fans([card.fan()], zone.pwm)
             cards.append((card, zone.pwm))
 
+        errors = self.disk_errors(now)
         if self.disk_leds:
-            self.disk_leds.update(self.disk_errors(now))
+            self.disk_leds.update(errors)
+        storage = self.storage[2:]
         if self.settings.ledstatus:
-            self.led.set("fault" if faults else "ok")
+            self.led.set(status_led_state(faults, storage[0]))
         status = build_status(self.hw, rows, self.chassis.pwm,
                               self.settings.fanmode, reason, faults, True,
-                              cards)
+                              cards, storage,
+                              self.disk_leds.snapshot() if self.disk_leds
+                              else ())
         write_status(status)
         return status
 
     def disk_errors(self, now):
-        """Disks to show red: failed S.M.A.R.T. or faulted in an array
-        (arrays checked at the disk polling interval)."""
-        last, faults = self.array_faults
-        if last is None or now - last >= self.settings.diskinterval:
-            self.array_faults = (now, array_faults())
+        """Disks to show red: failed S.M.A.R.T. or faulted in an array.
+        Pools and arrays are checked at the disk polling interval."""
+        if self.storage[0] is None or \
+                now - self.storage[0] >= self.settings.diskinterval:
+            self.storage = (now,) + storage_health(self.settings.volumefull)
         return (self.disks.failed if self.disks else set()) | \
-            self.array_faults[1]
+            self.storage[1]
 
     def run(self):
         if not self.hw.present():

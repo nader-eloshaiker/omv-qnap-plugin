@@ -492,7 +492,8 @@ user, not just the LED. Options, in order of preference:
 - [ ] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
       status LED: degraded = red blink, resilver/rebuild = bicolour, scrub
       = no change; volume full = solid red at `volumefull` % (setting,
-      default 95). Unit tests only for degraded/rebuild for now. (8.0.2)
+      default 95). Unit tests only for degraded/rebuild for now. (8.0.2;
+      implemented 2026-10-18, unit-tested, hardware checks pending)
 - [x] Disk slot mapping + present/error/activity LEDs (7.0.2; bay N = SATA
       port N, verified on a TS-253D by lighting each LED and by reading
       from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
@@ -505,7 +506,8 @@ user, not just the LED. Options, in order of preference:
 - [ ] Locate action for bays and QM2 slots: *Disks* page (slot table +
       Locate toggle). The RPC writes `/run/qnapd/locate.json`; qnapd, the
       only hardware writer, applies it in the LED loop. Runtime state, not
-      config. Turns itself off after 10 minutes. (8.0.2)
+      config. Turns itself off after 10 minutes. (8.0.2; implemented
+      2026-10-18, unit-tested, hardware checks pending)
 - [ ] LED brightness night schedule (8.0.3)
 - [ ] OMV notifications for faults: fan failure, critical temperature,
       disk/array fault, daemon failure; research how OMV 8 registers a

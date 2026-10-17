@@ -74,7 +74,7 @@ data:
         name: diskinterval
         label: _("Disk polling interval")
         value: 60
-        hint: _("Seconds between S.M.A.R.T. temperature reads.")
+        hint: _("Seconds between S.M.A.R.T. temperature reads. A disk with no reads or writes since its last check is only re-read every 30 minutes, so idle disks can spin down.")
         validators:
           min: 10
           max: 3600

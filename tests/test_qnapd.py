@@ -47,6 +47,8 @@ class FakeSysfs(unittest.TestCase):
         qnapd.STATUS_FILE = os.path.join(self.root, "run", "status.json")
         qnapd.IDENTITY_FILE = os.path.join(self.root, "identity.json")
         qnapd.KERNEL_LOG_COMMANDS = ()  # Never read the real dmesg.
+        qnapd.LOCATE_FILE = os.path.join(self.root, "run", "locate.json")
+        qnapd.MOUNTS_FILE = os.path.join(self.root, "mounts")  # None.
         ec = "class/hwmon/hwmon3"
         put(self.root, ec + "/name", "qnap8528")
         put(self.root, ec + "/fan1_input", "1300\n")
@@ -171,7 +173,8 @@ class TestDaemon(FakeSysfs):
         with open(qnapd.STATUS_FILE) as f:
             self.assertEqual(json.load(f)["pwm"], status["pwm"])
         types = {r["type"] for r in status["rows"]}
-        self.assertEqual(types, {"fan", "pwm", "temperature"})
+        self.assertEqual(types, {"fan", "pwm", "temperature", "storage"})
+        self.assertEqual(status["storage"], {"state": "ok", "reasons": []})
 
     def test_manual_mode(self):
         d = self.daemon(fanmode="manual", manualpwm=90)
@@ -388,8 +391,9 @@ class TestQm2(FakeQm2):
         for led in ("qm2-7:red:slot1", "qm2-7:green:slot1"):
             put(self.root, card + led + "/trigger", "none")
         leds = qnapd.DiskLeds()
-        self.assertEqual([dev for kind, _, dev in leds.slots if kind == "qm2"],
-                         ["nvme0n1", None])
+        self.assertEqual([(dev, slot) for kind, _, dev, slot in leds.slots
+                          if kind == "qm2"],
+                         [("nvme0n1", "qm2.0-slot1"), (None, "qm2.0-slot2")])
         green = card + "qm2-7:green:slot1/"
         red = card + "qm2-7:red:slot1/"
         leds.poll(now=0)
@@ -463,7 +467,28 @@ class TestDiskLeds(FakeSysfs):
 
     def test_bays_follow_sata_ports(self):
         leds = qnapd.DiskLeds()
-        self.assertEqual([dev for _, _, dev in leds.slots], ["sda", None])
+        self.assertEqual([(dev, slot) for _, _, dev, slot in leds.slots],
+                         [("sda", "bay1"), (None, "bay2")])
+
+    def test_locate_blinks_red_then_expires(self):
+        leds = qnapd.DiskLeds()
+        put(self.root, "run/locate.json",
+            json.dumps({"bay2": qnapd.time.time() + 600}))
+        leds.poll(now=0)
+        self.assertEqual((self.hdd(2, "brightness"), self.hdd(2, "trigger")),
+                         ("2", "timer"))
+        self.assertEqual([s["locate"] for s in leds.snapshot()], [False, True])
+        # Expired requests are ignored: the empty bay goes dark again.
+        put(self.root, "run/locate.json",
+            json.dumps({"bay2": qnapd.time.time() - 1}))
+        os.utime(qnapd.LOCATE_FILE, (1, 1))
+        leds.poll(now=1)
+        self.assertEqual((self.hdd(2, "brightness"), self.hdd(2, "trigger")),
+                         ("0", "none"))
+
+    def test_locate_file_garbage_ignored(self):
+        put(self.root, "run/locate.json", "[1, 2")
+        self.assertEqual(qnapd.DiskLeds().locating(), {})
 
     def test_present_activity_error(self):
         leds = qnapd.DiskLeds()
@@ -553,6 +578,84 @@ config:
             (33.0, True))
         # Standby: smartctl returns no data, health unknown.
         self.assertEqual(qnapd.parse_smart({"power_mode": {}}), (None, None))
+
+
+class TestStorageHealth(FakeSysfs):
+    ZLIST = "app-store\tONLINE\t12%\nbackup-store\tDEGRADED\t40%\n"
+    ZSTATUS = """  pool: app-store
+ state: ONLINE
+  scan: scrub in progress since Sun Oct 18 00:24:01 2026
+  pool: backup-store
+ state: DEGRADED
+  scan: resilver in progress since Sun Oct 18 01:00:00 2026
+"""
+
+    def test_zfs_resilver_counts_scrub_does_not(self):
+        self.assertEqual(qnapd.zfs_pools(self.ZLIST, self.ZSTATUS), {
+            "app-store": ("ONLINE", 12, False),
+            "backup-store": ("DEGRADED", 40, True)})
+
+    def test_md_arrays(self):
+        self.assertEqual(qnapd.md_arrays(
+            "Personalities : [raid1]\n"
+            "md0 : active raid1 sdb1[1] sda1[0]\n"
+            "      976630464 blocks super 1.2 [2/1] [U_]\n"
+            "md1 : active raid1 sdd1[1] sdc1[0]\n"
+            "      976630464 blocks super 1.2 [2/1] [U_]\n"
+            "      [==>..................]  recovery = 12.6% (123/976)\n"
+            "md2 : active raid1 sdf1[1] sde1[0]\n"
+            "      976630464 blocks super 1.2 [2/2] [UU]\n"
+            "      [==>..................]  check = 12.6% (123/976)\n"),
+            {"md0": (True, False), "md1": (True, True), "md2": (False, False)})
+
+    def test_state_priority(self):
+        ok = {"p": ("ONLINE", 10, False)}
+        self.assertEqual(qnapd.storage_state(ok, {}, {}, 95), ("ok", []))
+        self.assertEqual(qnapd.storage_state(
+            {"p": ("DEGRADED", 10, True)}, {}, {}, 95),
+            ("rebuilding", ["p resilvering"]))
+        self.assertEqual(qnapd.storage_state(
+            {"p": ("DEGRADED", 10, False)}, {"md0": (False, True)}, {}, 95),
+            ("degraded", ["p DEGRADED", "md0 rebuilding"]))
+        self.assertEqual(qnapd.storage_state(
+            ok, {"md0": (True, False)}, {"/srv/data": 97}, 95),
+            ("fault", ["/srv/data 97% full", "md0 degraded"]))
+        self.assertEqual(qnapd.storage_state(
+            {"p": ("FAULTED", 96, False)}, {}, {}, 95),
+            ("fault", ["p FAULTED", "p 96% full"]))
+
+    def test_volume_usage_local_block_filesystems_once(self):
+        usage = qnapd.volume_usage(
+            "/dev/sda1 / ext4 rw 0 0\n"
+            "/dev/sda1 /export/x ext4 rw 0 0\n"
+            "tmpfs /run tmpfs rw 0 0\n"
+            "app-store /app-store zfs rw 0 0\n")
+        self.assertEqual(list(usage), ["/"])
+        self.assertTrue(0 <= usage["/"] <= 100)
+
+    def test_led_state(self):
+        self.assertEqual(qnapd.status_led_state(["fan1 stalled"], "ok"), "fault")
+        self.assertEqual(qnapd.status_led_state([], "fault"), "fault")
+        self.assertEqual(qnapd.status_led_state([], "degraded"), "warning")
+        self.assertEqual(qnapd.status_led_state([], "rebuilding"),
+                         "rebuilding")
+        self.assertEqual(qnapd.status_led_state([], "ok"), "ok")
+
+    def test_rebuilding_uses_bicolour_blink(self):
+        led = qnapd.StatusLed()
+        led.set("rebuilding")
+        self.assertEqual(get(self.root, self.led + "/blink_bicolor"), "1")
+        self.assertEqual(get(self.root, self.led + "/trigger"), "none")
+
+    def test_rebuilding_falls_back_to_red_blink(self):
+        os.makedirs(os.path.join(self.root, self.led, "blink_bicolor"))
+        qnapd.StatusLed().set("rebuilding")
+        self.assertEqual((get(self.root, self.led + "/brightness"),
+                          get(self.root, self.led + "/trigger")), ("2", "timer"))
+
+    def test_volumefull_setting(self):
+        self.assertEqual(qnapd.Settings({}).volumefull, 95)
+        self.assertEqual(qnapd.Settings({"volumefull": 20}).volumefull, 50)
 
 
 class TestPackaging(unittest.TestCase):

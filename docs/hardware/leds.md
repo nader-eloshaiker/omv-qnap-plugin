@@ -1,9 +1,10 @@
 # LEDs
 
-Code: `StatusLed`, `DiskLeds`, `qm2_slot_disks()`, `array_faults()`,
-`set_panel_brightness()` in `usr/sbin/qnapd`. Tests: `TestDiskLeds`,
-`TestDiskHealth`, `TestQm2.test_slot_leds_*`. Settings (Front panel tab):
-`ledstatus`, `leddisk`, `ledbrightness`.
+Code: `StatusLed`, `status_led_state()`, `storage_health()`, `DiskLeds`,
+`qm2_slot_disks()`, `set_panel_brightness()` in `usr/sbin/qnapd`. Tests:
+`TestDiskLeds`, `TestDiskHealth`, `TestStorageHealth`,
+`TestQm2.test_slot_leds_*`. Settings (Front panel tab): `ledstatus`,
+`leddisk`, `ledbrightness`, `volumefull`.
 
 ## Driver interfaces
 
@@ -24,10 +25,22 @@ Code: `StatusLed`, `DiskLeds`, `qm2_slot_disks()`, `array_faults()`,
 
 ## Status LED
 
-Highest wins: fault (solid red: fan stopped, no sensors, cannot set PWM)
-> service failed (blinking red, set by `failsafe` after a crash)
-> starting (blinking green) > ok (solid green). Phase 2 adds RAID/ZFS
-degraded (blinking red) and rebuild (green/red alternating).
+Highest wins:
+
+| State | LED | Cause |
+|-|-|-|
+| fault | solid red | fan stopped, no sensors, cannot set PWM; a pool FAULTED / UNAVAIL / SUSPENDED; a ZFS pool or local filesystem at least `volumefull` % used (default 95) |
+| degraded / service failed | blinking red | a pool DEGRADED or an md array with a missing member (`[U_]`); `failsafe` after a crash |
+| rebuilding | green/red alternating (`status/blink_bicolor`; red blink if the driver has `blink_sw_only`) | ZFS resilver, md recovery / resync / reshape |
+| starting | blinking green | daemon start |
+| ok | solid green | |
+
+A ZFS scrub and an md `check` never change the LED: they are routine
+maintenance, not warnings. Pools, arrays and usage are checked every
+`diskinterval` from `zpool list -H -o name,health,cap`, `zpool status
+-LP`, `/proc/mdstat` and `statvfs` of local ext*/xfs/btrfs/jfs/f2fs
+mounts (one per device); none of these wake disks. The reasons show on
+the Status page and dashboard widget as a `Storage` row.
 
 ## Disk LEDs (drive bays and QM2 slots)
 
@@ -54,6 +67,16 @@ degraded (blinking red) and rebuild (green/red alternating).
 - One thread owns all disk LEDs; clean stop leaves present/error colours,
   `failsafe` stops any blinking.
 
+## Locate
+
+*System › QNAP › Disks* lists each bay and QM2 slot (device, model, size,
+LED state). *Locate* blinks the slot's LED red for 10 minutes; *Stop
+locating* ends it early. The RPC (`Qnap.locate`) only records the request
+in `/run/qnapd/locate.json` (`{slot id: expiry}`); the disk LED thread
+applies it within 0.25 s, so qnapd stays the only writer of LEDs. Bays:
+brightness 2 + timer; QM2 slots: red 2 (the card's PIC blinks it). Slot
+ids are `bayN` and `<card>-slotN`. Needs *Drive the disk LEDs*.
+
 ## Verifying a mapping on new hardware
 
 Use `tools/hw/led-test.sh` (5 s per LED) and ask a person which bay or slot
@@ -63,5 +86,5 @@ and confirm which LED blinks. Protocol:
 
 ## Not done yet
 
-Locate (red blink) from the UI, USB LED for One Touch Copy (Phase 3), night
-brightness schedule, status LED for degraded/rebuilding arrays (Phase 2).
+USB LED for One Touch Copy (Phase 3), night brightness schedule, Btrfs
+device errors in the status LED.

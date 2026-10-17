@@ -18,6 +18,9 @@
 
 class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 {
+	// A locate request stops by itself after this long.
+	const LOCATE_SECONDS = 600;
+
 	public function getName()
 	{
 		return "Qnap";
@@ -33,6 +36,8 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setDriverSettings");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
+		$this->registerMethod("getSlots");
+		$this->registerMethod("locate");
 	}
 
 	public function getSettings($params, $context)
@@ -154,6 +159,46 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 			];
 		}
 		return $rows;
+	}
+
+	/**
+	 * Drive bays and QM2 slots as qnapd reports them (Disks page).
+	 */
+	public function getSlots($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$status = $this->qnapd(["status", "--json"]);
+		return $status['slots'] ?? [];
+	}
+
+	/**
+	 * Start or stop blinking a slot's LED. Only qnapd writes LEDs: this
+	 * records the request in a file it watches, and it stops by itself.
+	 */
+	public function locate($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$this->validateMethodParams($params, "rpc.qnap.locate");
+		$ids = array_column($this->getSlots([], $context), "id");
+		if (!in_array($params['id'], $ids, TRUE)) {
+			throw new \OMV\Exception(sprintf(gettext("Unknown slot '%s'."),
+				$params['id']));
+		}
+		$file = "/run/qnapd/locate.json";
+		$requests = json_decode(@file_get_contents($file) ?: "{}", TRUE);
+		$requests = array_filter(is_array($requests) ? $requests : [],
+			function($until) { return $until > time(); });
+		if ($params['enable']) {
+			$requests[$params['id']] = time() + self::LOCATE_SECONDS;
+		} else {
+			unset($requests[$params['id']]);
+		}
+		if (!is_dir(dirname($file))) {
+			mkdir(dirname($file), 0755, TRUE);
+		}
+		$tmp = $file . ".tmp";
+		file_put_contents($tmp, json_encode((object)$requests));
+		rename($tmp, $file);
 	}
 
 	private function setSubset($params)
