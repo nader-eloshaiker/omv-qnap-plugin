@@ -43,6 +43,8 @@ class FakeSysfs(unittest.TestCase):
         self.root = tempfile.mkdtemp()
         qnapd.SYSFS = self.root
         qnapd.STATUS_FILE = os.path.join(self.root, "run", "status.json")
+        qnapd.IDENTITY_FILE = os.path.join(self.root, "identity.json")
+        qnapd.KERNEL_LOG_COMMANDS = ()  # Never read the real dmesg.
         ec = "class/hwmon/hwmon3"
         put(self.root, ec + "/name", "qnap8528")
         put(self.root, ec + "/fan1_input", "1300\n")
@@ -352,6 +354,49 @@ class TestQm2(FakeQm2):
         self.assertEqual(get(self.root, "devices/platform/qm2.0/fan_default"),
                          "1")
 
+    def test_slot_leds_follow_switch_ports(self):
+        ssd = self.SWITCH + "/0000:02:01.0/0000:03:00.0"
+        put(self.root, ssd + "/class", "0x010802")
+        put(self.root, ssd + "/nvme/nvme0/nvme0n1/stat",
+            "10 0 0 0 5 0 0 0 0 0 0")
+        link(self.root, "block/nvme0n1", ssd + "/nvme/nvme0/nvme0n1")
+        os.makedirs(os.path.join(self.root, self.SWITCH, "0000:02:02.0"))
+        card = "devices/platform/qm2.0/leds/"
+        for led in ("qm2-7:red:slot2", "qm2-7:green:slot2"):
+            put(self.root, card + led + "/brightness", "0")
+            link(self.root, card + led + "/device", "devices/platform/qm2.0")
+            link(self.root, "class/leds/" + led, card + led)
+        for led in ("qm2-7:red:slot1", "qm2-7:green:slot1"):
+            put(self.root, card + led + "/trigger", "none")
+        leds = qnapd.DiskLeds()
+        self.assertEqual([dev for kind, _, dev in leds.slots if kind == "qm2"],
+                         ["nvme0n1", None])
+        green = card + "qm2-7:green:slot1/"
+        red = card + "qm2-7:red:slot1/"
+        leds.poll(now=0)
+        self.assertEqual((get(self.root, green + "brightness"),
+                          get(self.root, red + "brightness"),
+                          get(self.root, card + "qm2-7:green:slot2/brightness")),
+                         ("1", "0", "0"))
+        put(self.root, ssd + "/nvme/nvme0/nvme0n1/stat",
+            "12 0 0 0 5 0 0 0 0 0 0")
+        leds.poll(now=0.25)
+        self.assertEqual(get(self.root, green + "trigger"), "timer")
+        leds.update({"nvme0n1"})
+        leds.poll(now=3)
+        self.assertEqual((get(self.root, green + "brightness"),
+                          get(self.root, red + "brightness")), ("0", "1"))
+
+    def test_swapped_generic_card(self):
+        card, = qnapd.Hardware.qm2_cards()
+        ssd = self.SWITCH + "/0000:02:01.0/0000:03:00.0"
+        put(self.root, ssd + "/class", "0x010802")
+        put(self.root, ssd + "/nvme/nvme0/nvme0n1/stat", "0")
+        link(self.root, "block/nvme0n1", ssd + "/nvme/nvme0/nvme0n1")
+        os.makedirs(os.path.join(self.root, self.SWITCH, "0000:02:02.0"))
+        self.assertEqual(qnapd.qm2_slot_disks(card, swapped=True),
+                         [None, "nvme0n1"])
+
     def test_failsafe_skips_card_when_disabled(self):
         qnapd.failsafe("signal", qm2=False)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
@@ -399,7 +444,7 @@ class TestDiskLeds(FakeSysfs):
 
     def test_bays_follow_sata_ports(self):
         leds = qnapd.DiskLeds()
-        self.assertEqual([dev for _, dev in leds.slots], ["sda", None])
+        self.assertEqual([dev for _, _, dev in leds.slots], ["sda", None])
 
     def test_present_activity_error(self):
         leds = qnapd.DiskLeds()

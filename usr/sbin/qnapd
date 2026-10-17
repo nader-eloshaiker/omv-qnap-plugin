@@ -463,10 +463,29 @@ def md_faulty(text):
             if disk_name(m)}
 
 
+def nvme_failed():
+    """NVMe namespaces (nvme0n1) whose controller fails S.M.A.R.T. health
+    (critical warning set). NVMe SSDs do not spin down, so this is safe."""
+    result = set()
+    for block in sorted(glob.glob(sysfs("block", "nvme*n*"))):
+        name = os.path.basename(block)
+        controller = re.match(r"nvme\d+", name).group(0)
+        try:
+            proc = subprocess.run(["smartctl", "-H", "-j", "/dev/" + controller],
+                                  capture_output=True, text=True, timeout=20)
+            _, passed = parse_smart(json.loads(proc.stdout or "{}"))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            continue
+        if passed is False:
+            result.add(name)
+    return result
+
+
 def array_faults():
-    """Disks a ZFS pool or md array considers faulted. Both read in-kernel
-    state, so sleeping disks are not woken."""
-    result = md_faulty(read("/proc/mdstat") or "")
+    """Disks a ZFS pool or md array considers faulted, plus failing NVMe
+    SSDs. All read in-kernel or controller state, so sleeping disks are not
+    woken."""
+    result = md_faulty(read("/proc/mdstat") or "") | nvme_failed()
     try:
         proc = subprocess.run(["zpool", "status", "-LP"], capture_output=True,
                               text=True, timeout=20)
@@ -476,15 +495,73 @@ def array_faults():
     return result
 
 
-class DiskLeds:
-    """Front disk LEDs (qnap8528::hddN, 0 off, 1 green, 2 red), QTS style:
-    green when a disk is present, blinking green on I/O, red when S.M.A.R.T.
-    fails or a ZFS/md array has faulted the disk, off for an empty bay.
+PCI_ADDRESS = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]$")
 
-    Bay N is the disk on SATA port N (ataN), so it survives sdX renaming
-    (verified on a TS-253D: hdd1 = ata1, hdd2 = ata2). Activity comes from
-    /sys/block/<disk>/stat, which never wakes a sleeping disk. A thread polls
-    it; it is the only writer of these LEDs.
+
+def pci_children(path):
+    return sorted(d for d in os.listdir(path) if PCI_ADDRESS.match(d)) \
+        if os.path.isdir(path) else []
+
+
+def qm2_swapped(card):
+    """qm2mod corrects generic QM2-2P cards whose slots 1/2 are wired the
+    other way round; it only says so in the kernel log (swap=1)."""
+    serial = card.attr("serial") or ""
+    for cmd in KERNEL_LOG_COMMANDS:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        found = re.findall(r"qm2_identify_card: Card: \S+ serial=%s .*"
+                           r"swap=(\d)" % re.escape(serial), out)
+        if found:
+            return found[-1] == "1"
+    return False
+
+
+def qm2_slot_disks(card, swapped=False):
+    """[nvme block device or None] per M.2 slot of a QM2 card, in slot order.
+
+    Slots are the card switch's downstream ports that hold an NVMe SSD or
+    nothing (ports with a NIC behind them are skipped), in PCI order.
+    Verified on a QM2-2P-244A-A1 (ports 02:00.0 and 02:08.0 = slots 1, 2).
+    """
+    pci = card.pci_path()
+    if not pci:
+        return []
+    disks = {}
+    for block in glob.glob(sysfs("block", "nvme*n*")):
+        real = os.path.realpath(block)
+        if real.startswith(pci + os.sep):
+            port = real[len(pci) + 1:].split(os.sep)[0]
+            disks.setdefault(port, os.path.basename(block))
+    slots = []
+    for port in pci_children(pci):
+        children = pci_children(os.path.join(pci, port))
+        classes = [read(os.path.join(pci, port, c, "class")) or ""
+                   for c in children]
+        if all(c.startswith("0x0108") for c in classes):  # NVMe or empty
+            slots.append(disks.get(port))
+    if swapped and len(slots) >= 2:
+        slots[0], slots[1] = slots[1], slots[0]
+    return slots
+
+
+class DiskLeds:
+    """Disk LEDs, QTS style: green when a disk is present, blinking green
+    on I/O, red when S.M.A.R.T. fails or a ZFS/md array has faulted the
+    disk, off for an empty slot.
+
+    - Bays (qnap8528::hddN, 0 off / 1 green / 2 red): bay N is the disk on
+      SATA port N (ataN), so it survives sdX renaming (verified on a
+      TS-253D: hdd1 = ata1, hdd2 = ata2). Blinks in hardware.
+    - QM2 card slots (qm2-<i2c>:{green,red}:slotN, separate LEDs): slot N
+      from qm2_slot_disks(). The green LED cannot blink by itself, so the
+      kernel's timer trigger toggles it over the card's I2C bus.
+
+    Activity comes from /sys/block/<disk>/stat, which never wakes a sleeping
+    disk. A thread polls it and is the only writer of these LEDs.
     """
 
     POLL_SECONDS = 0.25
@@ -499,16 +576,29 @@ class DiskLeds:
         self.counters = {}
         self.last_io = {}
         self.shown = {}
+        self.swapped = {}
         self.stop = threading.Event()
         self.thread = None
         self.discover()
 
     def discover(self):
+        """[(kind, leds, disk)]; kind "bay" has (led,), "qm2" (green, red)."""
         slots = []
         for led in sorted(glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")),
                           key=lambda p: index_of(p, DRIVER + "::hdd")):
             port = index_of(led, DRIVER + "::hdd")
-            slots.append((led, self.disk_on_port(port)))
+            slots.append(("bay", (led,), self.disk_on_port(port)))
+        for card in Hardware.qm2_cards():
+            if card.name not in self.swapped:
+                self.swapped[card.name] = qm2_swapped(card)
+            leds = {os.path.basename(p): p for p in card.leds()}
+            prefix = next((n.split(":")[0] for n in leds), None)
+            for n, disk in enumerate(
+                    qm2_slot_disks(card, self.swapped[card.name]), 1):
+                green = leds.get("%s:green:slot%d" % (prefix, n))
+                red = leds.get("%s:red:slot%d" % (prefix, n))
+                if green and red:
+                    slots.append(("qm2", (green, red), disk))
         self.slots = slots
 
     @staticmethod
@@ -520,7 +610,7 @@ class DiskLeds:
         return None
 
     def update(self, errors):
-        """Called from the control loop: rediscover bays (hot swap) and set
+        """Called from the control loop: rediscover slots (hot swap) and set
         the disks to show as failed."""
         self.discover()
         self.errors = set(errors)
@@ -540,32 +630,45 @@ class DiskLeds:
             return "active"
         return "on"
 
-    def show(self, led, state):
-        brightness = {"off": 0, "on": 1, "active": 1, "error": 2}[state]
-        write(os.path.join(led, "trigger"), "none")
-        write(os.path.join(led, "brightness"), brightness)
+    def blink(self, led):
+        write(os.path.join(led, "trigger"), "timer")
+        for name in ("delay_on", "delay_off"):
+            path = os.path.join(led, name)
+            if os.path.exists(path):
+                write(path, self.BLINK_MS)
+
+    def show(self, kind, leds, state):
+        for led in leds:
+            write(os.path.join(led, "trigger"), "none")
+        if kind == "bay":
+            led, = leds
+            write(os.path.join(led, "brightness"),
+                  {"off": 0, "on": 1, "active": 1, "error": 2}[state])
+            if state == "active":
+                self.blink(led)
+            return
+        green, red = leds
+        write(os.path.join(red, "brightness"), 1 if state == "error" else 0)
+        write(os.path.join(green, "brightness"),
+              1 if state in ("on", "active") else 0)
         if state == "active":
-            write(os.path.join(led, "trigger"), "timer")
-            for name in ("delay_on", "delay_off"):
-                path = os.path.join(led, name)
-                if os.path.exists(path):
-                    write(path, self.BLINK_MS)
+            self.blink(green)
 
     def poll(self, now=None):
         now = time.monotonic() if now is None else now
-        for led, dev in self.slots:
+        for kind, leds, dev in self.slots:
             state = self.state(dev, now)
-            if self.shown.get(led) == state:
+            if self.shown.get(leds) == state:
                 continue
             try:
-                self.show(led, state)
-                self.shown[led] = state
+                self.show(kind, leds, state)
+                self.shown[leds] = state
             except OSError as e:
                 if state == "active":
                     # No timer trigger: stay solid green.
-                    self.shown[led] = state
+                    self.shown[leds] = state
                 else:
-                    log.warning("Cannot set %s: %s", led, e)
+                    log.warning("Cannot set %s: %s", leds[0], e)
 
     def start(self):
         def loop():
@@ -584,10 +687,10 @@ class DiskLeds:
         if self.thread:
             self.thread.join(2)
         now = time.monotonic()
-        for led, dev in self.slots:
+        for kind, leds, dev in self.slots:
             state = self.state(dev, now)
             try:
-                self.show(led, "on" if state == "active" else state)
+                self.show(kind, leds, "on" if state == "active" else state)
             except OSError:
                 pass
 
@@ -1006,7 +1109,8 @@ def failsafe(service_result=None, qm2=None):
                 card.set_pwm(PWM_MAX)
         except OSError as e:
             log.error("Failsafe could not set %s fan: %s", card.name, e)
-    for led in glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")):
+    for led in glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")) + \
+            glob.glob(sysfs("class", "leds", "qm2-*:green:slot*")):
         if "[timer]" in (read(os.path.join(led, "trigger")) or ""):
             try:
                 write(os.path.join(led, "trigger"), "none")

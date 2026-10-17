@@ -460,7 +460,13 @@ user, not just the LED. Options, in order of preference:
       port N, verified on a TS-253D by lighting each LED and by reading
       from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
 - [ ] Locate action in UI
-- [ ] QM2 slot LEDs (present / error / locate) from NVMe mapping + health
+- [x] QM2 slot LEDs: present / activity / error (7.0.2). Slot N = Nth
+      NVMe-or-empty downstream port of the card's switch, swapped when
+      qm2mod logs swap=1; verified on a QM2-2P-244A-A1 by lighting each slot
+      and by reading from nvme0 only (slot 1 blinked). Green blink is the
+      kernel timer trigger over the card's I2C; error = S.M.A.R.T. (NVMe
+      critical warning) or a faulted ZFS/md member.
+- [ ] Locate action for bays and QM2 slots
 - [ ] LED brightness night schedule
 - [ ] OMV notifications for faults
 - [ ] Optional per-PWM-group curves for multi-fan models
@@ -496,7 +502,7 @@ user, not just the LED. Options, in order of preference:
 
 | Risk / question | Mitigation |
 |-|-|
-| EC power-on fan behaviour unknown before the daemon starts | Daemon starts early (`After=systemd-modules-load`); observe on hardware |
+| EC power-on fan behaviour unknown before the daemon starts | Daemon starts early (`After=systemd-modules-load`). Observed after an unplanned power loss on the TS-253D: the EC powered the box back on (power recovery = last state) and qnapd was controlling the fans 11.5 s after kernel start, without a login |
 | Button mapping disagreement (README vs source) | Verify with `evtest`; report upstream |
 | Disk-slot ↔ `/dev/sdX` mapping unknown | Discover via ATA port; config override |
 | QM2 card fan needs a different minimum PWM than the chassis fan | Measure on hardware; per-zone `minpwm` if needed |

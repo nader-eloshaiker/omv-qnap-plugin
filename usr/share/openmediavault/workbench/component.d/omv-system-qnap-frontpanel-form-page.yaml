@@ -20,7 +20,7 @@ data:
         name: leddisk
         label: _("Drive the disk LEDs")
         value: true
-        hint: _("Green when a disk is present, blinking on disk activity, red on a S.M.A.R.T. failure or when a ZFS pool or RAID array has faulted the disk. Sleeping disks are not woken.")
+        hint: _("Drive bays and QM2 card M.2 slots. Green when a disk is present, blinking on disk activity, red on a S.M.A.R.T. failure or when a ZFS pool or RAID array has faulted the disk. Sleeping disks are not woken.")
       - type: numberInput
         name: ledbrightness
         label: _("LED brightness (%)")
