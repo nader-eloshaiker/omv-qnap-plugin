@@ -62,6 +62,10 @@ PWM_MAX = 255
 PWM_REFRESH_SECONDS = 60
 # Never lower the PWM by more than this per control cycle.
 PWM_MAX_STEP_DOWN = 16
+# A PWM read back further than this from what was written is rewritten at
+# once. qnap8528 stores percent (128 reads back as 127); a QM2 PIC was seen
+# to ignore the first write after a daemon restart (it reported success).
+PWM_READBACK_TOLERANCE = 3
 # A fan reporting 0 RPM at or above this PWM for FAN_FAULT_CYCLES is failed.
 FAN_FAULT_MIN_PWM = 64
 FAN_FAULT_CYCLES = 3
@@ -988,9 +992,15 @@ class Daemon:
         pwm, reason = self.curve.next_pwm(zone.pwm, readings, zone.hold)
         return pwm, reason, []
 
-    def apply(self, zone, pwm, reason, setter, now):
-        """Write the PWM when changed (or periodically); return faults."""
-        if pwm == zone.pwm and now - zone.last_write < PWM_REFRESH_SECONDS:
+    def apply(self, zone, pwm, reason, setter, now, readback=None):
+        """Write the PWM when changed, when the hardware no longer reports
+        what was written (readback), or periodically; return faults."""
+        drifted = zone.pwm is not None and readback is not None and \
+            abs(readback - zone.pwm) > PWM_READBACK_TOLERANCE
+        if drifted:
+            log.warning("%s PWM reads %d, expected %d: rewriting", zone.name,
+                        readback, zone.pwm)
+        elif pwm == zone.pwm and now - zone.last_write < PWM_REFRESH_SECONDS:
             return []
         try:
             setter(pwm)
@@ -1009,7 +1019,8 @@ class Daemon:
         readings, rows = collect(self.hw, self.settings, self.disks, now)
         pwm, reason, faults = self.decide(
             self.chassis, self.smooth_cpu(readings, now), readings)
-        faults += self.apply(self.chassis, pwm, reason, self.hw.set_pwm, now)
+        faults += self.apply(self.chassis, pwm, reason, self.hw.set_pwm, now,
+                             self.hw.read_pwm())
         faults += self.check_fans(self.hw.fans(), self.chassis.pwm)
 
         cards = []
@@ -1025,7 +1036,7 @@ class Daemon:
                 zone, {"qm2": temps})
             faults += ["%s: %s" % (card.name, f) for f in card_faults]
             faults += self.apply(zone, card_pwm, card_reason, card.set_pwm,
-                                 now)
+                                 now, card.read_pwm())
             faults += self.check_fans([card.fan()], zone.pwm)
             cards.append((card, zone.pwm))
 

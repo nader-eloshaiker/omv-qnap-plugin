@@ -33,7 +33,9 @@ Code: `FanCurve`, `Zone`, `Daemon.decide/apply/step`, `failsafe()` in
 6. **Ramp down** only once *that* source has cooled by `hysteresis` °C,
    then by at most 16 PWM per cycle.
 7. **Floor**: never below the zone's floor, whatever the mode.
-8. Write PWM when changed, and at least every 60 s.
+8. Write PWM when changed, at least every 60 s, and at once if the PWM read
+   back differs from the last write by more than 3 (qnap8528 rounds to
+   percent).
 9. **Fan failure**: 0 RPM at PWM ≥ 64 (or 65535) for 3 cycles → fault →
    status LED red.
 
@@ -76,5 +78,9 @@ during testing.
 - **Do not blast a fan on routine restarts.** Full speed on every Apply was
   audible; QM2 fans now return to the card's controller on clean stops.
 - **A loaded UI skews measurements.** Close the OMV dashboard before tuning.
+- **Verify writes.** In the kill -9 failsafe test the QM2 PIC ignored the
+  first PWM write after the restart (the I2C write reported success) and
+  stayed at full speed until the 60 s refresh. The daemon now compares the
+  read-back PWM every cycle and rewrites on a mismatch.
 
 Measurements behind these numbers: [ts-253d.md](ts-253d.md).

@@ -443,7 +443,10 @@ user, not just the LED. Options, in order of preference:
       (chassis and QM2; noise check still open)
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
       OMV spindown enabled)
-- [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink
+- [x] Verify failsafe: `kill -9` → chassis and QM2 fans 255, status LED red
+      blink, systemd restart after ~11 s, LED green (2026-10-17). Found and
+      fixed: the QM2 PIC ignores the first PWM write after a restart; the
+      daemon now verifies the read-back every cycle.
 - [x] QM2 card fan zones (qm2mod), `loadqm2`, card info (Drivers / System pages)
 - [ ] Disk source: the TS-253D boots from a USB SSD (`sdc`, non-removable)
       that lands in the HDD temperature range; decide whether SSD/USB

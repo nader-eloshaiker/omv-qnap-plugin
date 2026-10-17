@@ -324,6 +324,23 @@ class TestQm2(FakeQm2):
         self.assertEqual(status["pwm"], 50)
         self.assertEqual(status["qm2"], {"qm2.0": qnapd.MIN_PWM_QM2})
 
+    def test_ignored_write_is_rewritten(self):
+        d = self.daemon()
+        d.step(now=0)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "112")
+        # The card silently kept its old (failsafe) speed.
+        put(self.root, self.qm2 + "/pwm1", "255")
+        d.step(now=10)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "112")
+
+    def test_readback_rounding_tolerated(self):
+        d = self.daemon()
+        status = d.step(now=0)
+        chassis = int(get(self.root, self.ec + "/pwm1"))
+        put(self.root, self.ec + "/pwm1", str(chassis - 1))  # percent drift
+        d.step(now=10)
+        self.assertEqual(get(self.root, self.ec + "/pwm1"), str(chassis - 1))
+
     def test_card_left_alone_when_disabled(self):
         status = self.daemon(useqm2=False).step(now=0)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
