@@ -1,0 +1,37 @@
+name: Model support
+description: Report how the plugin behaves on a model other than the TS-253D.
+labels: [model-support]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports from other models are very welcome, working or not. Please
+        remove serial numbers, host names and IP addresses from anything
+        you paste.
+  - type: input
+    id: model
+    attributes:
+      label: NAS model (and QM2 card, if any)
+    validations:
+      required: true
+  - type: dropdown
+    id: works
+    attributes:
+      label: What works?
+      multiple: true
+      options:
+        - Driver loads
+        - Fan control
+        - Status LED
+        - Disk LEDs
+        - QM2 card fan / LEDs
+        - Nothing yet
+  - type: textarea
+    id: info
+    attributes:
+      label: Output of `qnapd info` and `qnapd status`
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (bay-to-LED mapping, fan behaviour, anything odd)

@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove serial numbers, host names and IP addresses from
+        anything you paste.
+  - type: input
+    id: model
+    attributes:
+      label: NAS model (and QM2 card, if any)
+      placeholder: TS-253D, QM2-2P-244A-A1
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin, OMV and kernel versions
+      placeholder: "openmediavault-qnap 8.0.0, OMV 8.5, 6.17.2-1-pve"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `qnapd status` and `journalctl -u qnapd -n 50`
+      render: text

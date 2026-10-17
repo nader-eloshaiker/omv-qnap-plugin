@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/nader-eloshaiker/omv-qnap-plugin/tree/main/docs
+    about: Architecture, hardware notes and testing guides.
+  - name: Driver problems (qnap8528)
+    url: https://github.com/0xGiddi/qnap8528/issues
+    about: The kernel driver does not load or does not recognise your model.

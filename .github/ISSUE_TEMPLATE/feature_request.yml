@@ -1,0 +1,11 @@
+name: Feature request
+description: Suggest something the plugin should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like, and why?
+      description: If QTS does this, describe how it behaves there.
+    validations:
+      required: true
