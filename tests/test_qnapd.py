@@ -480,6 +480,13 @@ class TestDiskLeds(FakeSysfs):
         leds.poll(now=3)
         self.assertEqual(self.hdd(1, "brightness"), "2")
 
+    def test_usb_disks_not_a_fan_source(self):
+        disk = "devices/pci0000:00/0000:00:15.0/usb2/2-1/2-1:1.0/host3/" \
+            "target3:0:0/3:0:0:0/block/sdc"
+        put(self.root, disk + "/removable", "0")
+        link(self.root, "block/sdc", disk)
+        self.assertEqual(qnapd.DiskTemps.devices(), ["sda", "sdb"])
+
     def test_failsafe_stops_blinking(self):
         put(self.root, "class/leds/qnap8528::hdd1/trigger", "[timer]")
         qnapd.failsafe("signal", qm2=False)
@@ -600,6 +607,51 @@ class TestInfo(FakeSysfs):
         # Second call comes from the cache, not the (slow) VPD.
         os.remove(os.path.join(self.root, vpd + "enclosure_serial"))
         self.assertEqual(self.info("")["serial"], "Q000X000000")
+
+
+_loader = importlib.machinery.SourceFileLoader(
+    "model_test", os.path.join(HERE, os.pardir, "tools", "model-test.py"))
+_spec = importlib.util.spec_from_loader("model_test", _loader)
+model_test = importlib.util.module_from_spec(_spec)
+_loader.exec_module(model_test)
+
+
+class TestModelReport(unittest.TestCase):
+    """tools/model-test.py: what reaches a public issue."""
+
+    def test_redact(self):
+        text = model_test.redact(
+            "host cogs, cogs-backup, serial=Q000X000000, Serial Number: ABC1\n"
+            "mac 24:5e:be:00:11:22, ip 192.0.2.7, kernel 6.17.2-1-pve, "
+            "board QY47A", {"cogs", "QY47-SECRET"})
+        self.assertEqual(text,
+            "host [redacted], cogs-backup, serial=[redacted], Serial Number: "
+            "[redacted]\nmac [mac], ip [ip], kernel 6.17.2-1-pve, board QY47A")
+
+    def test_drop_serials(self):
+        self.assertEqual(model_test.drop_serials(
+            {"model": "TS-253D", "serial": "Q0", "qm2": [{"serial": "x", "pci": "p"}]}),
+            {"model": "TS-253D", "qm2": [{"pci": "p"}]})
+
+    def test_disk_attachment(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        model_test.SYS = root
+        for dev, path in (
+                ("sda", "pci0000:00/0000:00:12.0/ata1/host0/target0:0:0/0:0:0:0"),
+                ("sdc", "pci0000:00/0000:00:15.0/usb2/2-1/2-1:1.0/host3/"
+                        "target3:0:0/3:0:0:0"),
+                ("nvme0n1", "pci0000:00/0000:00:1c.0/0000:01:00.0/0000:02:01.0/"
+                            "0000:03:00.0/nvme/nvme0")):
+            disk = "devices/%s/block/%s" % (path, dev)
+            put(root, disk + "/size", "1953525168")
+            link(root, "block/" + dev, disk)
+        rows = {d["device"]: d for d in model_test.disks()}
+        self.assertEqual({k: v["attached"] for k, v in rows.items()},
+                         {"sda": "sata port 1", "sdc": "usb", "nvme0n1": "nvme"})
+        self.assertEqual(rows["nvme0n1"]["pci"],
+                         "0000:00:1c.0 > 0000:01:00.0 > 0000:02:01.0 > 0000:03:00.0")
+        self.assertEqual(rows["sda"]["size_gb"], 1000)
 
 
 if __name__ == "__main__":

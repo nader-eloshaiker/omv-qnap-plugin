@@ -403,9 +403,14 @@ class DiskTemps:
 
     @staticmethod
     def devices():
+        """Internal disks only. USB disks sit outside the chassis airflow,
+        so the fans cannot cool them; a USB boot SSD may also report
+        itself as non-removable."""
         result = []
         for path in sorted(glob.glob(sysfs("block", "sd*"))):
             if read(os.path.join(path, "removable")) == "1":
+                continue
+            if re.search(r"/usb\d+/", os.path.realpath(path)):
                 continue
             result.append(os.path.basename(path))
         return result

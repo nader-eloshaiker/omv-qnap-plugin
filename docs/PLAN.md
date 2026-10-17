@@ -466,9 +466,10 @@ user, not just the LED. Options, in order of preference:
       fixed: the QM2 PIC ignores the first PWM write after a restart; the
       daemon now verifies the read-back every cycle.
 - [x] QM2 card fan zones (qm2mod), `loadqm2`, card info (Drivers / System pages)
-- [ ] Disk source: the TS-253D boots from a USB SSD (`sdc`, non-removable)
-      that lands in the HDD temperature range; decide whether SSD/USB
-      disks belong in `disk` (or the NVMe range)
+- [x] Disk source: USB disks are left out (2026-10-17). They sit outside
+      the chassis airflow, so the fans cannot cool them; the reference
+      box's USB boot SSD reports itself non-removable, so qnapd checks the
+      sysfs path for a USB controller. No config field.
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
 - [x] Target OMV 8 only, version 8.0.0 (OMV 7 dropped, 2026-10-17)
@@ -499,8 +500,11 @@ user, not just the LED. Options, in order of preference:
       plugin notification type (8.0.2)
 - [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
       (implemented in 894f070; verify on hardware and tick)
-- [ ] confdb migrations: 8.0.1 (`volumefull`, plus the disk-source
-      decision from Phase 1), 8.0.2 (night schedule, notifications)
+- [ ] confdb migrations: 8.0.1 (`volumefull`), 8.0.2 (night schedule,
+      notifications)
+- [x] Model test protocol (2026-10-17): `tools/model-test.py` (read-only
+      report + guided checks at the box), *Model test report* issue form,
+      `docs/hardware/models.md`; model PRs must update the docs
 - Deferred: per-PWM-group curves for multi-fan models (needs a tester with
   such a model; the TS-253D has one chassis fan group)
 

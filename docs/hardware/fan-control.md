@@ -15,7 +15,10 @@ Code: `FanCurve`, `Zone`, `Daemon.decide/apply/step`, `failsafe()` in
   (`CPU_SMOOTH_SECONDS`) for the curve; the raw value for the critical check.
 - System: every qnap8528 `tempN_input` within 5–110 °C (junk filtered).
 - Disk: `smartctl -n standby -A -H -j` per non-removable `sdX`, every
-  `diskinterval` s (default 60); standby disks are skipped.
+  `diskinterval` s (default 60); standby disks are skipped. USB disks
+  (sysfs path through a `usbN` controller) are left out: they sit outside
+  the chassis airflow, so the fans cannot cool them. The reference box's
+  USB boot SSD reports itself as non-removable, hence the path check.
 - NVMe: each `nvme` hwmon `temp1` (Composite). The chassis zone sees every
   NVMe; a QM2 zone sees only the ones under its switch (by sysfs path).
 - QM2 slot sensors use the NVMe range and critical limit.
