@@ -19,7 +19,7 @@ set -e
 
 . /usr/share/openmediavault/scripts/helper-functions
 
-# Disk LEDs (activity / status).
+# Volume full threshold for the status LED (8.0.2).
 xpath="/config/services/qnap"
 if ! omv_config_exists "${xpath}/volumefull"; then
 	omv_config_add_key "${xpath}" "volumefull" "95"
