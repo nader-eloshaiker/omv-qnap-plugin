@@ -628,6 +628,13 @@ class TestModelReport(unittest.TestCase):
             "host [redacted], cogs-backup, serial=[redacted], Serial Number: "
             "[redacted]\nmac [mac], ip [ip], kernel 6.17.2-1-pve, board QY47A")
 
+    def test_placeholder_serials_not_secret(self):
+        # Seen on a TS-253D: every DMI serial reads "Default string".
+        self.assertEqual([v for v in ("Default string", "None", "0000-0000",
+                                      "Q000X000000", "S4EUNX0N000000Z")
+                          if model_test.is_secret(v)],
+                         ["Q000X000000", "S4EUNX0N000000Z"])
+
     def test_drop_serials(self):
         self.assertEqual(model_test.drop_serials(
             {"model": "TS-253D", "serial": "Q0", "qm2": [{"serial": "x", "pci": "p"}]}),

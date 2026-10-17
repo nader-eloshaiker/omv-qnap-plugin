@@ -86,6 +86,16 @@ def numbered(directory, pattern):
 
 # ---------------------------------------------------------------- redaction
 
+def is_secret(value):
+    """QNAP BIOSes fill every DMI field, serials included, with "Default
+    string"; redacting that would blank the vendor and product too. Real
+    serial numbers have no spaces."""
+    return bool(value) and len(value) >= 4 and not re.search(r"\s", value) \
+        and value.lower() not in ("none", "default", "n/a", "unknown",
+                                  "0123456789", "00:00:00:00:00:00") \
+        and not re.fullmatch(r"[0f-]+", value.lower())
+
+
 def secrets():
     """Values that must never appear in a report."""
     found = set()
@@ -96,9 +106,8 @@ def secrets():
                 SYS + "/class/nvme/*/serial", SYS + "/class/net/*/address"]
     for pattern in patterns:
         for path in glob.glob(pattern):
-            value = read(path)
-            if value and len(value) >= 4 and value != "00:00:00:00:00:00":
-                found.add(value)
+            if is_secret(read(path)):
+                found.add(read(path))
     for name in (socket.gethostname(), socket.getfqdn()):
         if name and name not in ("localhost", "localhost.localdomain"):
             found.add(name)
