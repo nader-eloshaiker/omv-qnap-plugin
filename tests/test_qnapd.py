@@ -175,6 +175,23 @@ class TestDaemon(FakeSysfs):
         self.assertIn("fan1 not spinning", status["faults"])
         self.assertEqual(get(self.root, self.led + "/brightness"), "2")
 
+    def test_led_without_timer_trigger_stays_solid(self):
+        real_write = qnapd.write
+
+        def write(path, value):
+            if value == "timer":
+                raise OSError(22, "Invalid argument")
+            real_write(path, value)
+
+        qnapd.write = write
+        try:
+            led = qnapd.StatusLed()
+            led.set("warning")
+        finally:
+            qnapd.write = real_write
+        self.assertEqual(get(self.root, self.led + "/brightness"), "2")
+        self.assertEqual(led.state, "warning")
+
     def test_failsafe(self):
         qnapd.failsafe("exit-code")
         self.assertEqual(get(self.root, self.ec + "/pwm1"), "255")
@@ -234,7 +251,8 @@ class TestQm2(FakeQm2):
     def test_discovery(self):
         card, = qnapd.Hardware.qm2_cards()
         self.assertEqual(card.name, "qm2.0")
-        self.assertEqual(card.label, "QM2-2P10G1TB")
+        self.assertEqual(card.label, "QM2")
+        self.assertEqual(card.attr("model"), "QM2-2P10G1TB")
         self.assertEqual([t for _, _, t in card.temps()], [45.0])
         self.assertEqual(card.pci_path(),
                          os.path.realpath(os.path.join(self.root,
@@ -247,8 +265,9 @@ class TestQm2(FakeQm2):
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "112")
         self.assertEqual(status["qm2"], {"qm2.0": 112})
         labels = {r["label"] for r in status["rows"]}
-        self.assertIn("QM2-2P10G1TB fan", labels)
-        self.assertIn("QM2-2P10G1TB slot 1", labels)
+        self.assertIn("QM2 fan", labels)
+        self.assertIn("QM2 duty", labels)
+        self.assertIn("QM2 slot 1", labels)
         # The chassis zone still sees every NVMe SSD (70 >= 65).
         self.assertEqual(status["pwm"], 255)
 

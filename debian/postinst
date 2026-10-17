@@ -35,11 +35,6 @@ case "$1" in
         fi
 
         omv-salt deploy run --no-color --quiet qnap || :
-
-        # Pick up a new daemon after an upgrade.
-        if [ -n "$2" ]; then
-            deb-systemd-invoke try-restart qnapd.service || :
-        fi
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
@@ -52,5 +47,14 @@ case "$1" in
 esac
 
 #DEBHELPER#
+
+# Pick up a new daemon and unit file after an upgrade. dh_installsystemd
+# --no-start does not reload systemd, so do it here before restarting.
+if [ "$1" = "configure" ] && [ -n "$2" ]; then
+    if [ -d /run/systemd/system ]; then
+        systemctl --system daemon-reload >/dev/null || :
+    fi
+    deb-systemd-invoke try-restart qnapd.service || :
+fi
 
 exit 0

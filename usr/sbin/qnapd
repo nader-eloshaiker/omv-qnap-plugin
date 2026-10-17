@@ -306,7 +306,10 @@ class Qm2Card:
 
     @property
     def label(self):
-        return self.attr("model") or self.name
+        """Short UI label: "QM2" for the first card, "QM2 #N" after that
+        (the model name is too long for the dashboard tiles)."""
+        index = self.name.rpartition(".")[2]
+        return "QM2" if index in ("", "0") else "QM2 #%d" % (int(index) + 1)
 
     def leds(self):
         return [p for p in sorted(glob.glob(sysfs("class", "leds",
@@ -417,11 +420,18 @@ class StatusLed:
             # Set the colour first, then the trigger, so the EC blinks
             # the requested colour.
             write(os.path.join(self.path, "brightness"), brightness)
-            if blink:
-                write(os.path.join(self.path, "trigger"), "timer")
             self.state = state
         except OSError as e:
             log.warning("Failed to set status LED to %s: %s", state, e)
+            return
+        if blink:
+            try:
+                write(os.path.join(self.path, "trigger"), "timer")
+            except OSError as e:
+                # The timer trigger is a module (ledtrig-timer) that
+                # qnapd.service loads; without it the colour stays solid.
+                log.warning("Status LED cannot blink (is ledtrig-timer "
+                            "loaded?): %s", e)
 
 
 def set_panel_brightness(value):
@@ -547,7 +557,7 @@ def build_status(hw, rows, pwm, mode, reason, faults, running, cards=()):
                                 card.label + " fan", card.fan()["rpm"]))
         if card_pwm is not None:
             pwm_rows.append(pwm_row(card.name + "-pwm",
-                                    card.label + " fan duty", card_pwm))
+                                    card.label + " duty", card_pwm))
     return {
         "timestamp": time.time(),
         "running": running,

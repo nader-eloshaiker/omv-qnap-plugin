@@ -196,7 +196,7 @@ for 0–40 °C ambient. Disks are the thermally sensitive part of a NAS
 | Daemon stops cleanly | `ExecStopPost=qnapd failsafe` → PWM 255 |
 | Daemon crashes / killed | same `ExecStopPost`, and status LED → blinking red |
 | Exception in a loop iteration | PWM 255 for that cycle, logged, loop continues |
-| Driver not loaded | daemon exits 1; systemd retries every 10 s, 5× per 5 min |
+| Driver not loaded | daemon exits 1; systemd retries every 10 s, without a start limit (every Apply restarts the daemon, so a limit of 5 per 5 min was hit during testing) |
 | Sensor source missing | ignored if others work; all missing → 255 |
 | QM2 card: no slot/NVMe sensor | that card's fan → 255 + fault |
 
@@ -393,13 +393,19 @@ user, not just the LED. Options, in order of preference:
 - [x] `qnapd`: discovery, curve, presets, hysteresis, critical, failsafe
 - [x] Status LED (ok / fault / starting / service failed)
 - [x] Panel brightness, power recovery, EuP, module loading, `reboot=efi`
-- [ ] Install on a TS-253D (OMV 8.5 / Debian 13): verify every page, Save/Apply flow,
-      dashboard widget, service status in *Diagnostics › Services*
+- [x] Install on a TS-253D (OMV 8.5 / Debian 13): verify every page, Save/Apply flow,
+      dashboard widget, service status (2026-10-17). OMV 8 has no generic
+      *Diagnostics › Services* table; the module status shows in the
+      dashboard *Services* widget. Fixed on the way: PEP 440 versions,
+      postinst daemon-reload, start limit, ledtrig-timer, VPD NULs.
 - [ ] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
       OMV spindown enabled)
 - [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink
 - [x] QM2 card fan zones (qm2mod), `loadqm2`, Hardware page card info
+- [ ] Disk source: the TS-253D boots from a USB SSD (`sdc`, non-removable)
+      that lands in the HDD temperature range; decide whether SSD/USB
+      disks belong in `disk` (or the NVMe range)
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
 - [ ] Test on OMV 7 (Bookworm)
@@ -407,7 +413,8 @@ user, not just the LED. Options, in order of preference:
       run unit tests, lintian, `php -l`
 
 ### Phase 2 — QTS-like LEDs & health
-- [ ] mdstat → status LED (degraded/rebuild), volume-full check
+- [ ] mdstat **and ZFS** (`zpool status -x`; the reference box uses ZFS
+      pools, no mdraid) → status LED (degraded/rebuild), volume-full check
 - [ ] Disk slot mapping + present/error/activity LEDs, Locate action in UI
 - [ ] QM2 slot LEDs (present / error / locate) from NVMe mapping + health
 - [ ] LED brightness night schedule

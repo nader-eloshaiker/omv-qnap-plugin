@@ -43,6 +43,12 @@ collectd/RRD graphs and salt-generated workbench files.
   avoid `": "` inside `_()` strings (or quote the whole scalar).
 - Salt file modes: quote them (`mode: '0644'`) — required on OMV 8's Salt.
 - `\OMV\System\Process` does not escape arguments; validate input.
+- With `dh_installsystemd --no-start` the generated postinst snippet does
+  **not** run `systemctl daemon-reload`. A postinst that restarts its own
+  service on upgrade must reload first, or the restart uses the old unit
+  file (seen on OMV 8.5).
+- Don't put a tight `StartLimitBurst` on a service that salt restarts on
+  every Apply: a few Save/Apply rounds hit it and the service stays dead.
 - Package versions and `migrations.d/<id>_<version>.sh` names must be
   PEP 440 versions: `omv-confdbadm migrate` uses `packaging.version`, so
   `7.0~alpha2` fails with "No valid version" (verified on OMV 8.5).
