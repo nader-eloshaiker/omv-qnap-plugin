@@ -34,8 +34,8 @@ data:
       - type: checkbox
         name: rebootefi
         label: _("Use the EFI reboot method (reboot=efi)")
-        value: false
-        hint: _("Adds reboot=efi to the kernel command line via /etc/default/grub.d and runs update-grub. Fixes reboots hanging on several QNAP models. Takes effect after the next reboot; GRUB only.")
+        value: true
+        hint: _("On by default. Adds reboot=efi to the kernel command line via /etc/default/grub.d and runs update-grub. Fixes reboots hanging on QNAP x86 models such as the TS-253D. Takes effect after the next reboot; GRUB only.")
       - type: textInput
         name: rebootefiactive
         label: _("reboot=efi active in running kernel")

@@ -158,7 +158,7 @@
 		},
 		"rebootefi": {
 			"type": "boolean",
-			"default": false
+			"default": true
 		}
 	}
 }

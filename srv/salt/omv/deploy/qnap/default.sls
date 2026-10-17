@@ -109,7 +109,11 @@ configure_qnap_grub_reboot_efi:
     - contents: |
         {{ pillar['headers']['auto_generated'] }}
         {{ pillar['headers']['warning'] }}
-        GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} reboot=efi"
+        # Only once, even if reboot=efi was also added to /etc/default/grub.
+        case " ${GRUB_CMDLINE_LINUX_DEFAULT} " in
+        *" reboot=efi "*) ;;
+        *) GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} reboot=efi" ;;
+        esac
     - makedirs: True
     - user: root
     - group: root

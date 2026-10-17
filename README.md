@@ -69,8 +69,8 @@ a crash), and you can leave them to the card permanently by unticking
 
 ### Reboot hangs
 
-Some QNAP x86 units hang on reboot under Linux. Ticking **Power ›
-Use the EFI reboot method** adds `reboot=efi` to the kernel command line.
+Some QNAP x86 units hang on reboot under Linux. **Power ›
+Use the EFI reboot method** (on by default) adds `reboot=efi` to the kernel command line.
 The plugin writes this to `/etc/default/grub.d/openmediavault-qnap.cfg` and
 runs `update-grub`, so your own `/etc/default/grub` is not edited. The
 change takes effect after the next reboot.

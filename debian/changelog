@@ -5,6 +5,7 @@ openmediavault-qnap (7.0.2) stable; urgency=low
   * History graphs, System page, Front panel / Power / Drivers tabs.
   * CPU temperature smoothing, per-source hysteresis, fan floors.
   * QM2 fans return to the card's controller on a clean stop.
+  * reboot=efi is on by default for new installs, and never duplicated.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 18:31:25 +1100
 

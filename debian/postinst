@@ -34,6 +34,12 @@ case "$1" in
             omv-confdbadm migrate "conf.service.qnap" "${2%%~*}"
         fi
 
+        # Salt notices changed states by modification time, and dpkg stamps
+        # files with the changelog date, so a rebuilt package of the same
+        # version would keep using salt's cached copy. Refresh the times.
+        touch /srv/salt/omv/deploy/qnap/*.sls \
+            /srv/salt/omv/deploy/qnap/files/* \
+            /srv/salt/omv/deploy/collectd/plugins/qnap.sls || :
         omv-salt deploy run --no-color --quiet qnap || :
         # Graphs: collectd runs "qnapd collectd"; draw placeholders now.
         omv-salt deploy run --no-color --quiet collectd || :

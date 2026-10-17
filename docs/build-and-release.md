@@ -56,6 +56,9 @@ datamodel via `confdb/create.d/conf.service.qnap.sh` instead.
   postinst reloads systemd itself, after `#DEBHELPER#`, before
   `try-restart qnapd` on upgrade; otherwise the restart uses the old unit.
 - Salt (not dpkg) enables and starts `qnapd`.
+- The postinst `touch`es the plugin's salt files first: salt only re-reads
+  states whose mtime changed, and dpkg stamps files with the changelog
+  date, so rebuilding the same version would otherwise keep a stale state.
 - postrm `remove`: drop the collectd config and restart collectd. `purge`:
   config node, `/etc/qnapd`, RRD data, graph images, module-load and grub
   files (+ `update-grub`).

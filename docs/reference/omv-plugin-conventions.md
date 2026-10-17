@@ -43,6 +43,12 @@ collectd/RRD graphs and salt-generated workbench files.
   avoid `": "` inside `_()` strings (or quote the whole scalar).
 - Salt file modes: quote them (`mode: '0644'`) — required on OMV 8's Salt.
 - `\OMV\System\Process` does not escape arguments; validate input.
+- **Salt caches states by modification time.** Its file server
+  (`/var/cache/salt/minion/files`) only re-reads a `.sls` whose mtime
+  changed, and dpkg stamps files with the changelog date
+  (`SOURCE_DATE_EPOCH`). A rebuilt package of the *same version* with a
+  changed state was silently ignored (seen on OMV 8.5); the postinst now
+  `touch`es the plugin's salt files before deploying.
 - With `dh_installsystemd --no-start` the generated postinst snippet does
   **not** run `systemctl daemon-reload`. A postinst that restarts its own
   service on upgrade must reload first, or the restart uses the old unit

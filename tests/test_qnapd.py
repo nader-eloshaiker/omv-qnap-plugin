@@ -3,6 +3,7 @@
 Run with: python3 -m unittest discover -s tests -v
 """
 
+import glob
 import importlib.machinery
 import importlib.util
 import json
@@ -517,6 +518,33 @@ config:
 
 class TestPackaging(unittest.TestCase):
     """omv-confdbadm migrate parses versions with packaging.version."""
+
+    def test_form_defaults_match_datamodel(self):
+        omv = os.path.join(HERE, os.pardir, "usr", "share", "openmediavault")
+        with open(os.path.join(omv, "datamodels",
+                               "conf.service.qnap.json")) as f:
+            defaults = {k: v["default"] for k, v in
+                        json.load(f)["properties"].items()}
+        checked = 0
+        pattern = os.path.join(omv, "workbench", "component.d",
+                               "omv-system-qnap-*-form-page.yaml")
+        for page in glob.glob(pattern):
+            name = None
+            for line in open(page):
+                line = line.strip()
+                if line.startswith("- type:"):
+                    name = None
+                elif line.startswith("name:"):
+                    name = line.split(":", 1)[1].strip()
+                elif line.startswith("value:") and name in defaults:
+                    value = line.split(":", 1)[1].strip().strip('"')
+                    expected = defaults[name]
+                    if isinstance(expected, bool):
+                        expected = "true" if expected else "false"
+                    self.assertEqual(value, str(expected),
+                                     "%s in %s" % (name, page))
+                    checked += 1
+        self.assertGreater(checked, 20)
 
     PEP440ISH = re.compile(r"^\d+(\.\d+)*$")
 

@@ -139,7 +139,7 @@ a subset, so each page posts only its own fields; the last three share
 | `eupmode` | unchanged\|off\|on | Power | 1 |
 | `loadmodule`, `skiphwcheck` | bool / false | Drivers | 1 |
 | `loadqm2` | bool / false — load `qm2mod` at boot | Drivers | 1 (7.0.1) |
-| `rebootefi` | bool / false | Power | 1 |
+| `rebootefi` | bool / **true** (fixes reboot hangs; on for new installs) | Power | 1 |
 | `leddisk` (activity/error/locate) | bool | Front panel | 2 |
 | `ledschedule` (night brightness + times) | | Front panel | 2 |
 | `copyaction`, `copycommand` | none\|command | Buttons | 3 |
@@ -398,10 +398,11 @@ user, not just the LED. Options, in order of preference:
   `try-restart` on upgrade. `postrm purge`: drop config node, generated
   files, grub drop-in (+ `update-grub`).
 - `reboot=efi`: drop-in `/etc/default/grub.d/openmediavault-qnap.cfg`
-  (`GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} reboot=efi"`),
-  `update-grub` only on change. Never edits `/etc/default/grub`. If the
-  user already added `reboot=efi` there by hand, the duplicate is harmless;
-  the Power page shows whether it is active in `/proc/cmdline`.
+  appending to `GRUB_CMDLINE_LINUX_DEFAULT` only if `reboot=efi` is not
+  already there (the file is shell sourced by grub-mkconfig), on by default,
+  `update-grub` only on change. Never edits `/etc/default/grub`; a manual
+  `reboot=efi` there is not duplicated. The Power page shows whether it is
+  active in `/proc/cmdline`.
   *To check:* systems booting via systemd-boot (rare on OMV) are not covered.
 - Distribution: GitHub releases first; later propose to omv-extras.
 
