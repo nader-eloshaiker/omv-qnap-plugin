@@ -47,7 +47,7 @@ on these facts:
 | TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`, EC temps `temp1`/`temp6` only. The reference unit (qnap8528 1.24) **passes the IT8528 chip check without `skip_hw_check`** | Keep `skip_hw_check` in the UI as an escape hatch, not a TS-253D requirement |
 | hwmon index is not stable (`hwmon3` on one box, `hwmonN` on another) | Always discover devices by `name` |
 | EC temps include junk channels (e.g. `temp11=2°C` on TS-464); "CPU" EC temps may be bogus on x86 | Filter implausible values; use coretemp/k10temp for CPU |
-| Button codes: source says `BTN_1`=USB Copy, `BTN_2`=Reset (**README says the opposite**); `BTN_0`=chassis open; power button is ACPI | Verify with `evtest` on hardware before Phase 3 |
+| Button codes, **verified on the TS-253D**: `BTN_1` = Reset, `BTN_2` = USB Copy (the README is right, a source comment says the opposite); `BTN_0` = chassis open; power button is ACPI | Phase 3 uses the verified mapping; press and release are separate events, so hold time is measured in userspace |
 | qnap8528 sysfs attrs under `ec/` and `vpd/` have no trailing newline | Strip on read |
 | EC access may block up to ~5 s; all consumers share it | One daemon owns polling; UI reads the daemon's status file |
 | `smartctl` without `-n standby` wakes sleeping disks | Disk temps via `smartctl -n standby -A -j`, own (slower) interval |
@@ -318,8 +318,9 @@ qnap8528's `examples/qnap-set-status.sh`.
 - Read `/dev/input/by-path/platform-qnap8528-event` (fallback: scan
   `/proc/bus/input/devices` for `Name="qnap8528"`) with stdlib `struct`
   parsing of `input_event` — no python3-evdev dependency.
-- Keys: `BTN_0` chassis open, `BTN_1` USB Copy, `BTN_2` Reset (**verify;
-  README disagrees**). Measure hold time in userspace.
+- Keys (verified on a TS-253D, 2026-10-17): `BTN_1` Reset, `BTN_2` USB
+  Copy, `BTN_0` chassis open (untested). Press and release arrive as
+  separate events; measure hold time in userspace. No autorepeat (EV=3).
 - Actions (admin-configured, validated):
   - **USB Copy**: none | run a command (e.g. an OMV rsync job via
     `omv-rpc` / a script). USB LED blinks while the action runs, solid on
@@ -487,7 +488,9 @@ user, not just the LED. Options, in order of preference:
 - [ ] confdb migration for new fields
 
 ### Phase 3 — Buttons & sounds
-- [ ] evdev reader, hold-time detection, verify key mapping on TS-253D
+- [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
+      USB Copy = BTN_2)
+- [ ] evdev reader and hold-time detection in qnapd
 - [ ] USB Copy action + USB LED feedback
 - [ ] Reset button actions (safe defaults)
 - [ ] Chassis-open event, beeper investigation

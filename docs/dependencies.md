@@ -38,7 +38,8 @@ hand-made DKMS registrations of the same module first.
 ## Upstream requests worth making
 
 - qnap8528: export the detected model in sysfs (we parse the kernel log);
-  README vs source disagree on `BTN_1`/`BTN_2`; add a LICENSE file.
+  fix the source comment that swaps `BTN_1`/`BTN_2` (the README is right,
+  verified on a TS-253D); add a LICENSE file.
 - qnap-qm2: add a LICENSE file; expose the slot `swap` flag in sysfs.
 
 ## Build-time

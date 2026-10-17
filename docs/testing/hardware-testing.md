@@ -44,11 +44,19 @@ OMV's engined (web UI sessions are logged out).
 ### LED mapping (needs a person looking at the box)
 Announce each step *before* it starts; 5 seconds per LED is enough.
 ```sh
-scp tools/hw/*.sh $NAS:/root/
+scp tools/hw/* $NAS:/root/
 ssh $NAS '/root/led-test.sh qnap8528::hdd1 5'       # which bay lit?
 ssh $NAS '/root/led-test.sh qm2-1:green:slot1 5'    # which slot lit? (rear bracket)
 ssh $NAS 'timeout 5 dd if=/dev/sda of=/dev/null bs=1M iflag=direct'   # which bay blinks?
 ```
+
+### Buttons (needs a person at the box)
+```sh
+ssh $NAS 'python3 /root/button-test.py 20'   # press one button per run
+```
+Prints each press and release with the hold time. One button per run
+avoids guessing which press was which. **Never press the power button**
+(ACPI: it shuts the NAS down). The Reset button is a rear pinhole.
 
 ### Fan PWM → RPM sweep
 ```sh
