@@ -78,29 +78,19 @@ change takes effect after the next reboot.
 ## Development
 
 ```sh
-make test     # unit tests against a fake sysfs (any OS with python3)
-make deb      # build the package on a Debian 12/13 host
-# or, from macOS/any host with Docker:
-docker run --rm -v "$PWD":/src:ro debian:bookworm bash -c \
-  'apt-get update -qq && apt-get install -y -qq build-essential debhelper fakeroot >/dev/null &&
-   cp -a /src /b && cd /b && dpkg-buildpackage -us -uc -b && ls ../*.deb'
+make test                      # unit tests against a fake sysfs (any OS with python3)
+make docker-deb                # build dist/*.deb in Docker (macOS or any host)
+make deb                       # or on a Debian 12/13 host with debhelper
+make deploy NAS=root@NAS_HOST  # install on a test NAS over SSH
 ```
 
-Layout:
+Documentation starts at [docs/README.md](docs/README.md): architecture,
+hardware facts and measurements, fan control, LEDs, OMV integration,
+dependencies, build and release, and testing on hardware and in the UI.
+[docs/PLAN.md](docs/PLAN.md) has the roadmap.
 
-```
-debian/                          packaging (qnapd.service lives here)
-srv/salt/omv/deploy/qnap/        salt state applied on "Apply"
-usr/sbin/qnapd                   the daemon (python3, stdlib only)
-usr/share/openmediavault/
-  datamodels/                    config + RPC schemas
-  confdb/create.d/               config DB initialisation
-  engined/{rpc,module}/          PHP RPC service + engine module
-  workbench/                     UI (navigation, routes, pages, dashboard)
-tests/                           unit tests
-docs/PLAN.md                     design and roadmap
-docs/reference/                  research notes (driver, QTS, prior art, OMV)
-```
+Using an AI coding assistant? [AGENTS.md](AGENTS.md) routes it to the
+right documents, roles and runbooks; see [docs/ai-context.md](docs/ai-context.md).
 
 Useful on the NAS: `qnapd status`, `qnapd info`, `journalctl -u qnapd -f`.
 

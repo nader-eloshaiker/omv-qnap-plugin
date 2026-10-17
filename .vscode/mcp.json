@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@0.0.83", "--browser", "chrome", "--ignore-https-errors", "--user-data-dir", ".playwright-mcp/profile", "--output-dir", ".playwright-mcp/output", "--console-level", "warning"]
+    }
+  }
+}

@@ -1,0 +1,80 @@
+# Build and release
+
+## Everyday commands
+
+```sh
+make test          # unit tests (python3 -m unittest), no hardware needed
+make docker-deb    # build dist/openmediavault-qnap_<version>_all.deb in debian:bookworm
+make deb           # same, on a Debian 12/13 host with debhelper installed
+make deploy NAS=root@NAS_HOST   # copy dist/*.deb to a NAS and install it (tools/nas-deploy.sh)
+```
+
+Extra checks before committing (CI does not exist yet):
+
+```sh
+docker run --rm -v "$PWD":/r:ro php:8.2-cli php -l /r/usr/share/openmediavault/engined/rpc/qnap.inc
+python3 -c "import json; [json.load(open(f'usr/share/openmediavault/datamodels/{f}')) for f in ('conf.service.qnap.json','rpc.qnap.json')]"
+# YAML: every file under usr/share/openmediavault/workbench must parse
+```
+
+When a test command is piped (e.g. `| tail`), use `set -o pipefail`, or a
+failing `make test` will not stop the build.
+
+## Versions
+
+- Native package, version `7.0.N` (major = OMV major, omv-extras style).
+- **Versions must be PEP 440 compatible: digits and dots only.**
+  `omv-confdbadm migrate` parses the previous version and every migration
+  file name with Python `packaging.version`; `7.0~alpha2` failed every
+  upgrade with "No valid version". `TestPackaging` in `tests/test_qnapd.py`
+  enforces this.
+- Bump the version (new `debian/changelog` entry) whenever a release adds
+  config fields, and add a migration for them.
+
+## Config migrations
+
+`usr/share/openmediavault/confdb/migrations.d/conf.service.qnap_<version>.sh`
+runs on upgrade when `<version>` is newer than the installed one. Add keys
+idempotently:
+
+```sh
+xpath="/config/services/qnap"
+if ! omv_config_exists "${xpath}/newfield"; then
+	omv_config_add_key "${xpath}" "newfield" "1"
+fi
+```
+
+Booleans are stored as `1`/`0`. Fresh installs get defaults from the
+datamodel via `confdb/create.d/conf.service.qnap.sh` instead.
+
+## postinst / postrm (verified on OMV 8.5)
+
+- postinst `configure`: trigger `update-workbench`, `omv-confdbadm create`,
+  `migrate` with `${2%%~*}` (old versions may carry a `~`), deploy salt
+  states `qnap` and `collectd`, draw placeholder graphs.
+- **`dh_installsystemd --no-start` does not run `daemon-reload`.** The
+  postinst reloads systemd itself, after `#DEBHELPER#`, before
+  `try-restart qnapd` on upgrade; otherwise the restart uses the old unit.
+- Salt (not dpkg) enables and starts `qnapd`.
+- postrm `remove`: drop the collectd config and restart collectd. `purge`:
+  config node, `/etc/qnapd`, RRD data, graph images, module-load and grub
+  files (+ `update-grub`).
+
+## Packaging layout
+
+`Architecture: all`; `debian/install` copies `srv/` and `usr/`;
+`debian/openmediavault-qnap.qnapd.service` is the unit; debhelper compat 13
+so one source builds on Bookworm and Trixie. Keep `__pycache__` out of
+`usr/` (tests set `sys.dont_write_bytecode`).
+
+## Releasing
+
+1. Changelog entry, version bump, migration if needed.
+2. `make test`, the extra checks, `make docker-deb`.
+3. Deploy to a test NAS and run the relevant parts of
+   [testing/hardware-testing.md](testing/hardware-testing.md).
+4. Tick the items in PLAN.md, commit, tag `v<version>`, attach the .deb to
+   a GitHub release.
+
+Commit messages: imperative subject, a body explaining why; no tool
+attribution trailers.

@@ -102,9 +102,10 @@ collectd/RRD graphs and salt-generated workbench files.
 ## Dev loop on a test NAS
 
 ```sh
-make deb                        # on a Debian 12/13 host or container
-scp ../openmediavault-qnap_*_all.deb nas:
-ssh nas 'apt install ./openmediavault-qnap_*_all.deb'
-ssh nas 'journalctl -u qnapd -f'
-ssh nas 'qnapd status; qnapd info'
+make test && make docker-deb
+make deploy NAS=root@NAS_HOST
+ssh root@NAS_HOST 'journalctl -u qnapd -f'
+ssh root@NAS_HOST 'qnapd status; qnapd info'
 ```
+
+Full protocol: [../testing/hardware-testing.md](../testing/hardware-testing.md).

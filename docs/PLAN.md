@@ -1,7 +1,8 @@
 # openmediavault-qnap — Implementation Plan
 
-Status: **Phase 1 scaffolded** (2026-10-16). This document is the design of
-record; update it as decisions change.
+Status: **Phase 1 validated on the reference TS-253D; Phase 2 LEDs and
+graphs in progress** (2026-10-17). This document is the roadmap and design
+of record; topic documents in [`docs/`](README.md) hold the details.
 
 ## 1. Goal
 

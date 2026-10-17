@@ -15,9 +15,13 @@ __pycache__/
 *.pyc
 
 # Editors / OS
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 .idea/
 .DS_Store
 
 # Docker build output
 dist/
+
+# Playwright MCP browser profile and screenshots (contains a login session)
+.playwright-mcp/

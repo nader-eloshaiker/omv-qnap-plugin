@@ -1,5 +1,5 @@
 # Developer helpers. The package itself builds with plain debhelper.
-.PHONY: test deb docker-deb clean
+.PHONY: test deb docker-deb deploy clean
 
 test:
 	python3 -m unittest discover -s tests -v
@@ -18,6 +18,10 @@ docker-deb:
 		cp -r /src /build && cd /build && rm -rf dist && \
 		dpkg-buildpackage -us -uc -b && cp ../*.deb /dist/'
 	ls -l dist/*.deb
+
+# Install the newest dist/*.deb on a test NAS: make deploy NAS=root@host
+deploy:
+	tools/nas-deploy.sh $(NAS)
 
 clean:
 	fakeroot debian/rules clean
