@@ -12,4 +12,5 @@ read-only report or some checks only.
 
 | Model | QM2 card | Plugin | Status | Fans | LEDs | Buttons | Notes | Source |
 |-|-|-|-|-|-|-|-|-|
+| TS-877 | — | — | planned | 2 groups (`pwm1`, `pwm7`), 4 fans | status, ident, hdd1-6, ssd1-2, m2ssd1-2; no hardware activity blink on bays | to check | LCD and buzzer researched, not tested | [ts-877.md](ts-877.md) |
 | TS-253D | QM2-2P-244A-A1 | 8.0.0 | verified | 1 group, stall measured | status, 2 bays, QM2 slots | Reset = BTN_1, USB Copy = BTN_2 | reference box | [ts-253d.md](ts-253d.md) |

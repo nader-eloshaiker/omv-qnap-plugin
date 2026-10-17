@@ -522,6 +522,18 @@ user, not just the LED. Options, in order of preference:
 - Deferred: per-PWM-group curves for multi-fan models (needs a tester with
   such a model; the TS-253D has one chassis fan group)
 
+### TS-877 support (second reference box; see hardware/ts-877.md)
+- [x] Research the delta (2026-10-18): qnap8528 entry, fans, LEDs, LCD
+      protocol, buzzer
+- [x] No software activity blink on models without EC hardware blink
+      (`HW_ACTIVITY_BLINK_MODELS`)
+- [x] `tools/hw/lcd-probe.py` to find the LCD port (queries only)
+- [ ] Install OMV 8 + qnap8528 on the TS-877; `model-test.py` report
+- [ ] LED walk: ssd/m2ssd discovery, bay → ATA port table, `ident`
+- [ ] Fan sweep per group; Ryzen CPU range; per-group curves (§11)
+- [ ] LCD: probe, then an `Lcd` thread in qnapd (pages, buttons)
+- [ ] Buzzer through pcspkr (test on the TS-253D first)
+
 ### Phase 3 — Buttons & sounds
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
       USB Copy = BTN_2)

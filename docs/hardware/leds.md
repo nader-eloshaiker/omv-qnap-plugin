@@ -64,6 +64,11 @@ the Status page and dashboard widget as a `Storage` row.
   or non-zero READ/WRITE/CKSUM), `/proc/mdstat` `(F)` members.
 - A ZFS mirror spread over both QM2 slots makes both blink together on
   writes. That is real activity, not a mapping error.
+- Activity blink on bays only for `HW_ACTIVITY_BLINK_MODELS` (TS-253D,
+  where the EC blinks in hardware). Elsewhere a blink request falls back
+  to software blinking through the EC (a write every ~100 ms per LED,
+  flooding the EC lock), so bays show present / error only. QM2 slots
+  blink through qm2mod and are not affected.
 - One thread owns all disk LEDs; clean stop leaves present/error colours,
   `failsafe` stops any blinking.
 

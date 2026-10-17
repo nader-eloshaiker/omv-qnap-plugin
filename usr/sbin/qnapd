@@ -690,6 +690,14 @@ def qm2_slot_disks(card, swapped=False):
     return slots
 
 
+# Models whose bay LEDs blink in EC hardware (qnap8528 "has_active"),
+# verified on the box. On other models a blink request makes the kernel
+# fall back to software blinking: one EC write every ~100 ms per LED, which
+# floods the EC lock that fan control also needs (e.g. TS-877: only its
+# M.2 LEDs blink in hardware). Bays there show present/error only.
+HW_ACTIVITY_BLINK_MODELS = ("TS-253D",)
+
+
 class DiskLeds:
     """Disk LEDs, QTS style: green when a disk is present, blinking green
     on I/O, red when S.M.A.R.T. fails or a ZFS/md array has faulted the
@@ -712,7 +720,9 @@ class DiskLeds:
     # Inside qnap8528's hardware blink window for disk LEDs (80-140 ms).
     BLINK_MS = 100
 
-    def __init__(self):
+    def __init__(self, bay_activity=False):
+        # Blink bays on I/O; only for HW_ACTIVITY_BLINK_MODELS (see there).
+        self.bay_activity = bay_activity
         self.slots = []
         self.errors = set()
         self.counters = {}
@@ -832,6 +842,8 @@ class DiskLeds:
         locating = self.locating()
         for kind, leds, dev, slot in self.slots:
             state = self.state(dev, now, slot in locating)
+            if state == "active" and kind == "bay" and not self.bay_activity:
+                state = "on"
             if self.shown.get(leds) == state:
                 continue
             try:
@@ -1162,7 +1174,13 @@ class Daemon:
         # Disk temperatures also carry S.M.A.R.T. health for the disk LEDs.
         self.disks = DiskTemps(settings.diskinterval) \
             if settings.use["disk"] or settings.leddisk else None
-        self.disk_leds = DiskLeds() if settings.leddisk else None
+        self.disk_leds = None
+        if settings.leddisk:
+            model = identity().get("model")
+            self.disk_leds = DiskLeds(model in HW_ACTIVITY_BLINK_MODELS)
+            if model not in HW_ACTIVITY_BLINK_MODELS:
+                log.info("Bay activity blink off: not verified to blink in "
+                         "hardware on %s", model or "this model")
         # (last check, faulted disks, LED state, reasons), every diskinterval.
         self.storage = (None, set(), "ok", [])
         self.led = StatusLed()

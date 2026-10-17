@@ -14,6 +14,7 @@ the others where they meet.
 | [build-and-release.md](build-and-release.md) | building the .deb, bumping the version, adding a confdb migration, editing postinst/postrm |
 | [testing/hardware-testing.md](testing/hardware-testing.md) | deploying to a NAS and verifying behaviour on real hardware |
 | [testing/model-testing.md](testing/model-testing.md) | collecting a test report from another QNAP model, or turning one into docs and a release |
+| [hardware/ts-877.md](hardware/ts-877.md) | working on TS-877 support (LCD, buzzer, two fan groups, 10 slots) |
 | [hardware/models.md](hardware/models.md) | checking which models have been tested and how |
 | [testing/ui-validation.md](testing/ui-validation.md) | checking the OMV web UI (Playwright MCP) |
 | [ai-context.md](ai-context.md) | setting up an AI coding assistant for this repo |

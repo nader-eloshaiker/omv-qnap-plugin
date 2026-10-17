@@ -491,7 +491,7 @@ class TestDiskLeds(FakeSysfs):
         self.assertEqual(qnapd.DiskLeds().locating(), {})
 
     def test_present_activity_error(self):
-        leds = qnapd.DiskLeds()
+        leds = qnapd.DiskLeds(bay_activity=True)
         leds.poll(now=0)
         self.assertEqual((self.hdd(1, "brightness"), self.hdd(2, "brightness")),
                          ("1", "0"))
@@ -543,6 +543,21 @@ class TestDiskLeds(FakeSysfs):
             self.assertEqual(disks.get(0), [("sda", "sda", 40.0)])
             # Idle past the refresh time and now in standby: no stale reading.
             self.assertEqual(disks.get(qnapd.DiskTemps.IDLE_REFRESH_SECONDS), [])
+
+    def test_no_software_blink_on_unverified_models(self):
+        """Bays without EC hardware blink would make the kernel blink them
+        in software through the EC; stay solid green instead."""
+        leds = qnapd.DiskLeds()  # bay_activity off by default.
+        leds.poll(now=0)
+        put(self.root, "devices/pci0000:00/0000:00:12.0/ata1/host0/"
+            "target0:0:0/0:0:0:0/block/sda/stat", "11 0 0 0 5 0 0 0 0 0 0")
+        leds.poll(now=0.25)
+        self.assertEqual((self.hdd(1, "brightness"), self.hdd(1, "trigger")),
+                         ("1", "none"))
+        put(self.root, "run/locate.json",
+            json.dumps({"bay1": qnapd.time.time() + 600}))
+        leds.poll(now=0.5)  # Locate blinks in hardware on every model.
+        self.assertEqual(self.hdd(1, "trigger"), "timer")
 
     def test_failsafe_stops_blinking(self):
         put(self.root, "class/leds/qnap8528::hdd1/trigger", "[timer]")
