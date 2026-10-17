@@ -275,9 +275,9 @@ the EC, and loud is better than cooked. The UI hint states this.
 | Booting / not ready | status blinking green | brightness 1 + trigger `timer` | 1 ✅ (daemon start) |
 | Fan failure, hardware error, volume full | status solid red | brightness 2 | 1 ✅ (fan/sensor) |
 | Service failed (ours) | status blinking red | brightness 2 + `timer` | 1 ✅ |
-| RAID degraded | status blinking red | brightness 2 + `timer` | 2 |
-| RAID rebuild / reshape / resync | status green/red alternating | `status/blink_bicolor` | 2 |
-| Volume ≥ 95 % full | status solid red | brightness 2 | 2 |
+| RAID / pool degraded | status blinking red | brightness 2 + `timer` | 2 |
+| RAID rebuild / reshape / resync, ZFS resilver (not scrub) | status green/red alternating | `status/blink_bicolor` | 2 |
+| Volume ≥ `volumefull` % full (default 95) | status solid red | brightness 2 | 2 |
 | Disk present | `hddN` green | `hddN/brightness=1` | 2 |
 | Disk activity | `hddN` blinking green | brightness 1 + `timer` (≈110 ms window) or oneshot per IO | 2 |
 | Disk error (SMART fail / md faulty) | `hddN` red | brightness 2 | 2 |
@@ -299,8 +299,16 @@ qnap8528's `examples/qnap-set-status.sh`.
 ### 6.2 Phase 2 sources
 
 - RAID: parse `/proc/mdstat` (`[U_]` → degraded, `recovery|resync|reshape`
-  → rebuilding). Optionally ZFS (`zpool status -x`) and Btrfs (`btrfs
-  device stats`) later.
+  → rebuilding; `check` is md's scrub and is ignored). ZFS: pool health
+  and capacity from `zpool list -H -o name,health,cap`, resilver from
+  `zpool status` (DEGRADED/FAULTED → degraded, `resilver in progress` →
+  rebuilding). **A scrub never changes the LED**: it is routine
+  maintenance, not a warning. Btrfs (`btrfs device stats`) later.
+- Volume full: ZFS `cap`, and `statvfs` of the filesystems OMV mounts
+  (served from the superblock, no disk I/O). Threshold `volumefull`
+  (percent, default 95, 50–100), a config field. Degraded and full are
+  covered by unit tests with captured `zpool`/mdstat output; degrading a
+  real pool to test is deferred (needs owner consent).
 - Disk ↔ slot mapping: model config only names `hdd1`, `hdd2`; map via
   `/sys/block/sdX/device` → ATA port (`/sys/class/ata_port`) → slot order.
   Must be verified on hardware; provide an override table in config.
@@ -464,28 +472,37 @@ user, not just the LED. Options, in order of preference:
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
 - [x] Target OMV 8 only, version 8.0.0 (OMV 7 dropped, 2026-10-17)
-- [ ] GitHub Actions: build .deb in `debian:trixie`,
-      run unit tests, lintian, `php -l`
+- [x] GitHub Actions (2026-10-17): `debian:trixie`, unit tests, `php -l`,
+      JSON/YAML/shell syntax, .deb build, lintian, .deb as artifact
 
 ### Phase 2 — QTS-like LEDs & health
-- [ ] mdstat **and ZFS** (`zpool status -x`; the reference box uses ZFS
-      pools, no mdraid) → status LED (degraded/rebuild), volume-full check
+- [ ] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
+      status LED: degraded = red blink, resilver/rebuild = bicolour, scrub
+      = no change; volume full = solid red at `volumefull` % (setting,
+      default 95). Unit tests only for degraded/rebuild for now. (8.0.1)
 - [x] Disk slot mapping + present/error/activity LEDs (7.0.2; bay N = SATA
       port N, verified on a TS-253D by lighting each LED and by reading
       from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
-- [ ] Locate action in UI
 - [x] QM2 slot LEDs: present / activity / error (7.0.2). Slot N = Nth
       NVMe-or-empty downstream port of the card's switch, swapped when
       qm2mod logs swap=1; verified on a QM2-2P-244A-A1 by lighting each slot
       and by reading from nvme0 only (slot 1 blinked). Green blink is the
       kernel timer trigger over the card's I2C; error = S.M.A.R.T. (NVMe
       critical warning) or a faulted ZFS/md member.
-- [ ] Locate action for bays and QM2 slots
-- [ ] LED brightness night schedule
-- [ ] OMV notifications for faults
-- [ ] Optional per-PWM-group curves for multi-fan models
+- [ ] Locate action for bays and QM2 slots: *Disks* page (slot table +
+      Locate toggle). The RPC writes `/run/qnapd/locate.json`; qnapd, the
+      only hardware writer, applies it in the LED loop. Runtime state, not
+      config. Turns itself off after 10 minutes. (8.0.1)
+- [ ] LED brightness night schedule (8.0.2)
+- [ ] OMV notifications for faults: fan failure, critical temperature,
+      disk/array fault, daemon failure; research how OMV 8 registers a
+      plugin notification type (8.0.2)
 - [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
-- [ ] confdb migration for new fields
+      (implemented in 894f070; verify on hardware and tick)
+- [ ] confdb migrations: 8.0.1 (`volumefull`, plus the disk-source
+      decision from Phase 1), 8.0.2 (night schedule, notifications)
+- Deferred: per-PWM-group curves for multi-fan models (needs a tester with
+  such a model; the TS-253D has one chassis fan group)
 
 ### Phase 3 — Buttons & sounds
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
