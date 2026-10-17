@@ -467,7 +467,7 @@ user, not just the LED. Options, in order of preference:
       every 60 s; with qnapd's disk polling paused they were in standby
       within 16 min. A S.M.A.R.T. read restarts the standby timer. qnapd
       now queries a disk only after it has done I/O, or every 30 min.
-      Verified after deploying (8.0.1): woken by smartd at 22:22, the disks
+      Verified after deploying, released in 8.0.1: woken by smartd at 22:22, the disks
       were in standby by 22:38 with qnapd polling every 60 s and stayed
       asleep; the only qnapd query in that window was the 30-min refresh.
       They slept 12–14 min after the wake, not the nominal 10 (drive
@@ -492,7 +492,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
       status LED: degraded = red blink, resilver/rebuild = bicolour, scrub
       = no change; volume full = solid red at `volumefull` % (setting,
-      default 95). Unit tests only for degraded/rebuild for now. (8.0.1)
+      default 95). Unit tests only for degraded/rebuild for now. (8.0.2)
 - [x] Disk slot mapping + present/error/activity LEDs (7.0.2; bay N = SATA
       port N, verified on a TS-253D by lighting each LED and by reading
       from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
@@ -505,14 +505,14 @@ user, not just the LED. Options, in order of preference:
 - [ ] Locate action for bays and QM2 slots: *Disks* page (slot table +
       Locate toggle). The RPC writes `/run/qnapd/locate.json`; qnapd, the
       only hardware writer, applies it in the LED loop. Runtime state, not
-      config. Turns itself off after 10 minutes. (8.0.1)
-- [ ] LED brightness night schedule (8.0.2)
+      config. Turns itself off after 10 minutes. (8.0.2)
+- [ ] LED brightness night schedule (8.0.3)
 - [ ] OMV notifications for faults: fan failure, critical temperature,
       disk/array fault, daemon failure; research how OMV 8 registers a
-      plugin notification type (8.0.2)
+      plugin notification type (8.0.3)
 - [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
       (implemented in 894f070; verify on hardware and tick)
-- [ ] confdb migrations: 8.0.1 (`volumefull`), 8.0.2 (night schedule,
+- [ ] confdb migrations: 8.0.2 (`volumefull`), 8.0.3 (night schedule,
       notifications)
 - [x] Model test protocol (2026-10-17): `tools/model-test.py` (read-only
       report + guided checks at the box), *Model test report* issue form,

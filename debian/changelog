@@ -1,3 +1,17 @@
+openmediavault-qnap (8.0.1) stable; urgency=low
+
+  * Let idle disks spin down: qnapd's S.M.A.R.T. reads restarted the
+    drives' standby timer, so idle disks never slept. Disks are now only
+    queried after they have done I/O, or every 30 minutes. Verified on a
+    TS-253D: the disks reach standby with qnapd running.
+  * Leave USB disks out of the fan curve: they sit outside the chassis
+    airflow, so the fans cannot cool them. A USB boot SSD that reports
+    itself as non-removable is caught by its sysfs path.
+  * tools/model-test.py and a Model test report issue form for owners of
+    QNAP models other than the TS-253D.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:16:20 +1100
+
 openmediavault-qnap (8.0.0) stable; urgency=low
 
   * Target OpenMediaVault 8 (Debian 13) only: version 8.x per the
