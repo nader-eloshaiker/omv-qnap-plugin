@@ -71,9 +71,22 @@ green). A clean `systemctl stop qnapd` → chassis 255, QM2 back to the card
 
 ### Disk standby
 Remove anything else polling disks first (e.g. tempmon sensors that run
-`smartctl` without `-n standby`). Let disks idle past the OMV spindown
-time, then check `hdparm -C /dev/sdX` stays `standby` across several
-`diskinterval`s and the bay LEDs stay solid green.
+`smartctl` without `-n standby`). Put a disk to sleep by hand rather than
+waiting for spindown: `smartctl -s standby,now /dev/sdX`. Check its state
+without waking it: `smartctl -n standby -i /dev/sdX` exits 2 in standby.
+Watch it across three `diskinterval`s: it must stay in standby, `qnapd
+status` must skip its temperature, its bay LED must stay solid green.
+
+If it wakes, find out why before blaming qnapd:
+- `/sys/block/sdX/stat` read/write counters: S.M.A.R.T. queries do not
+  count as I/O, so moving counters mean a real read or write.
+- `journalctl -u smartmontools`: OMV's smartd with **Power mode "Never"**
+  (`-n never` in `/etc/smartd.conf`) checks sleeping disks every 30 min
+  and wakes them. Set *Storage › S.M.A.R.T. › Settings › Power mode* to
+  *Standby* for spindown to work.
+- `zpool iostat <pool> 10`: pool I/O.
+- OMV applies spindown/APM with `hdparm`; if it is not installed the disk
+  settings have no effect (seen on the reference box).
 
 ### Power loss / boot
 After a reboot: `qnapd` active with `NRestarts=0`, journal shows control

@@ -441,8 +441,11 @@ user, not just the LED. Options, in order of preference:
       postinst daemon-reload, start limit, ledtrig-timer, VPD NULs.
 - [x] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
       (chassis and QM2; noise check still open)
-- [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
-      OMV spindown enabled)
+- [x] Verify qnapd does not wake disks (2026-10-17): sda put in standby
+      with `smartctl -s standby,now` stayed asleep through three disk polls
+      (temperature skipped, bay LED green). It was then woken by OMV's own
+      smartd 30-min check (`-n never`), not by qnapd. Natural spindown on
+      the reference box is not configured (hdparm not installed).
 - [x] Verify failsafe: `kill -9` → chassis and QM2 fans 255, status LED red
       blink, systemd restart after ~11 s, LED green (2026-10-17). Found and
       fixed: the QM2 PIC ignores the first PWM write after a restart; the
