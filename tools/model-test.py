@@ -215,6 +215,20 @@ def input_device():
     return None
 
 
+def serial_ports():
+    """UARTs the kernel found (type 0 = no UART). QNAP front LCDs hang off
+    one of them (tools/hw/lcd-probe.py finds which)."""
+    lines = []
+    for tty in sorted(glob.glob(SYS + "/class/tty/ttyS*"),
+                      key=lambda p: int(re.sub(r"\D", "", os.path.basename(p)) or 0)):
+        kind = read(tty + "/type")
+        if kind and kind != "0":
+            lines.append("%s type=%s port=%s irq=%s" % (
+                os.path.basename(tty), kind, read(tty + "/port"),
+                read(tty + "/irq")))
+    return lines
+
+
 def kernel_log():
     for cmd in (["dmesg"], ["journalctl", "-k", "-b", "--no-pager", "-o", "cat"]):
         out = run(cmd)
@@ -300,6 +314,7 @@ def report():
         section("Buttons (input device)", input_device() or "qnap8528 input device not found"),
         section("Disks (no S.M.A.R.T. read)", disk_rows),
         section("QM2 cards", qm2),
+        section("Serial ports (front LCD candidates)", serial_ports()),
         section("qnapd", qnapd, fold=True),
         section("PCI tree (lspci -tv)", run(["lspci", "-tv"]) or "lspci not available", fold=True),
         section("Kernel log (driver lines)", kernel_log(), fold=True),
