@@ -1,0 +1,7 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "diagnostics.performance-statistics.qnap"
+  text: _("QNAP")
+  icon: "mdi:fan"
+  url: "/diagnostics/performance-statistics/qnap"

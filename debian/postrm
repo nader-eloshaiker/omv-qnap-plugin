@@ -31,7 +31,8 @@ case "$1" in
             # omv-confdbadm cannot be used here, the datamodel is gone.
             omv_config_delete "/config/services/qnap"
         fi
-        rm -rf /etc/qnapd
+        rm -rf /etc/qnapd /var/lib/rrdcached/db/localhost/exec-qnap
+        rm -f /var/lib/openmediavault/rrd/exec-qnap-*.png
         rm -f /etc/modules-load.d/openmediavault-qnap.conf \
             /etc/modprobe.d/openmediavault-qnap.conf
         if [ -f /etc/default/grub.d/openmediavault-qnap.cfg ]; then
@@ -45,6 +46,11 @@ case "$1" in
     remove)
         if [ "${OMV_AVAILABLE}" = "true" ]; then
             dpkg-trigger update-workbench
+        fi
+        # qnapd is gone, so stop collectd from running "qnapd collectd".
+        if [ -f /etc/collectd/collectd.conf.d/qnap.conf ]; then
+            rm -f /etc/collectd/collectd.conf.d/qnap.conf
+            deb-systemd-invoke try-restart collectd.service || :
         fi
     ;;
 

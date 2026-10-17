@@ -35,6 +35,9 @@ case "$1" in
         fi
 
         omv-salt deploy run --no-color --quiet qnap || :
+        # Graphs: collectd runs "qnapd collectd"; draw placeholders now.
+        omv-salt deploy run --no-color --quiet collectd || :
+        omv-mkrrdgraph >/dev/null 2>&1 || :
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

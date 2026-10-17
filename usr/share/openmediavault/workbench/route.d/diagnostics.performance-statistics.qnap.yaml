@@ -1,0 +1,6 @@
+version: "1.0"
+type: route
+data:
+  url: "/diagnostics/performance-statistics/qnap"
+  title: _("QNAP")
+  component: omv-diagnostics-performance-statistics-qnap-rrd-page

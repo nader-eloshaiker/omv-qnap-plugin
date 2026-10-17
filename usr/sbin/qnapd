@@ -27,6 +27,7 @@ Sub-commands:
   status    Print the current readings (from the daemon, or read live).
   info      Print driver / hardware information.
   failsafe  Drive all fans to full speed (used by ExecStopPost).
+  collectd  Feed the daemon's readings to collectd's exec plugin (graphs).
 """
 
 import argparse
@@ -35,6 +36,7 @@ import glob
 import json
 import logging
 import os
+import re
 import signal
 import statistics
 import subprocess
@@ -353,6 +355,10 @@ class Qm2Card:
         write(os.path.join(self.hwmon, "pwm1"),
               min(PWM_MAX, max(0, int(value))))
 
+    def restore_default(self):
+        """Hand the fan back to the card's own (PIC) controller."""
+        write(os.path.join(self.device, "fan_default"), 1)
+
     def temps(self):
         """One sensor per M.2 slot; empty slots read implausible values."""
         lo, hi = PLAUSIBLE_TEMP
@@ -471,12 +477,16 @@ class FanCurve:
 
     Each enabled source is normalised to 0..1 against its (low, high) range
     and the maximum demand selects the PWM between minpwm and maxpwm.
-    Ramping up is immediate; ramping down uses temperatures inflated by the
-    hysteresis and is rate limited so the fan does not oscillate.
+    Ramping up is immediate. Ramping down waits until the source that last
+    raised the fan has cooled by the hysteresis, then is rate limited.
+    (Inflating every source by the hysteresis instead pinned the fan high:
+    +3 C on the 10 C disk range is ~57 PWM, so disks that never raised the
+    fan kept it up after a CPU burst.)
     """
 
     def __init__(self, settings):
         self.settings = settings
+        self._hold = {}
 
     def target(self, readings, offset=0.0):
         level = 0.0
@@ -495,16 +505,41 @@ class FanCurve:
                 return src
         return None
 
-    def next_pwm(self, current, readings):
-        """Return (pwm, reason)."""
+    def dominant(self, readings):
+        """The enabled source with the highest demand, or None."""
+        best, level = None, -1.0
+        for src, temps in readings.items():
+            if not temps or not self.settings.use.get(src):
+                continue
+            low, high = self.settings.ranges[src]
+            d = demand(max(temps), low, high)
+            if d > level:
+                best, level = src, d
+        return best
+
+    def next_pwm(self, current, readings, hold=None):
+        """Return (pwm, reason).
+
+        hold (a dict owned by the caller, one per fan zone) remembers which
+        source last raised the fan and its temperature at that time.
+        """
+        hold = self._hold if hold is None else hold
         src = self.critical(readings)
         if src:
             return PWM_MAX, "critical %s temperature" % src
         up = self.target(readings)
-        if current is None or up >= current:
+        if current is None or up > current:
+            src = self.dominant(readings)
+            hold.clear()
+            if src:
+                hold.update(source=src, temp=max(readings[src]))
             return up, "curve"
-        down = self.target(readings, offset=self.settings.hysteresis)
-        return min(current, max(down, current - PWM_MAX_STEP_DOWN)), "curve"
+        if up == current:
+            return up, "curve"
+        temps = readings.get(hold.get("source"))
+        if temps and max(temps) > hold["temp"] - self.settings.hysteresis:
+            return current, "curve"
+        return max(up, current - PWM_MAX_STEP_DOWN), "curve"
 
 
 # --------------------------------------------------------------------------
@@ -601,6 +636,7 @@ class Zone:
     def __init__(self, name, floor):
         self.name = name
         self.floor = floor
+        self.hold = {}
         self.pwm = None
         self.last_write = 0.0
 
@@ -662,7 +698,7 @@ class Daemon:
                    if self.settings.use.get(src)):
             return PWM_MAX, "no temperature sensors", \
                 ["no temperature sensors"]
-        pwm, reason = self.curve.next_pwm(zone.pwm, readings)
+        pwm, reason = self.curve.next_pwm(zone.pwm, readings, zone.hold)
         return pwm, reason, []
 
     def apply(self, zone, pwm, reason, setter, now):
@@ -724,6 +760,14 @@ class Daemon:
         if self.settings.ledstatus:
             self.led.set("starting")
         set_panel_brightness(self.settings.ledbrightness)
+        if not self.settings.use["qm2"]:
+            # The user prefers the cards to manage their own fans.
+            for card in self.hw.qm2_cards():
+                try:
+                    card.restore_default()
+                except OSError as e:
+                    log.warning("Cannot hand %s fan back to the card: %s",
+                                card.name, e)
         log.info("Started (mode=%s, interval=%ds, QM2 cards: %s)",
                  self.settings.fanmode, self.settings.interval,
                  ", ".join(c.name for c in self.hw.qm2_cards()) or "none")
@@ -739,14 +783,17 @@ class Daemon:
 
 
 def failsafe(service_result=None, qm2=None):
-    """Drive all fans to full speed; flag the status LED on failure.
+    """Drive the chassis fans to full speed (qnap8528 has no automatic mode
+    to return to); flag the status LED on failure.
 
-    QM2 card fans are included unless the user left them to the card
-    (useqm2 off). qm2mod's fan_default is not used: it is unknown whether
-    the PIC's default is temperature controlled.
+    QM2 card fans the plugin controls (useqm2) go back to the card's own
+    controller after a clean stop (service_result "success"), and to full
+    speed after a failure or when run by hand. With useqm2 off the plugin
+    never touches them.
     """
     if qm2 is None:
         qm2 = load_settings_or_default().use["qm2"]
+    clean = service_result == "success"
     hw = Hardware()
     try:
         hw.set_pwm(PWM_MAX)
@@ -754,9 +801,12 @@ def failsafe(service_result=None, qm2=None):
         log.error("Failsafe could not set PWM: %s", e)
     for card in hw.qm2_cards() if qm2 else []:
         try:
-            card.set_pwm(PWM_MAX)
+            if clean:
+                card.restore_default()
+            else:
+                card.set_pwm(PWM_MAX)
         except OSError as e:
-            log.error("Failsafe could not set %s PWM: %s", card.name, e)
+            log.error("Failsafe could not set %s fan: %s", card.name, e)
     if service_result not in (None, "", "success"):
         StatusLed().set("warning")
     return 0
@@ -777,17 +827,58 @@ def cmd_run(args):
     return Daemon(Settings.load(args.config)).run()
 
 
-def cmd_status(args):
-    settings = load_settings_or_default()
-    status = None
+def read_status(max_age):
+    """The daemon's status file, or None if missing or older than max_age."""
     try:
         with open(STATUS_FILE) as f:
             status = json.load(f)
-        if time.time() - status.get("timestamp", 0) > \
-                max(30, 3 * settings.interval):
-            status = None
     except (OSError, ValueError):
-        status = None
+        return None
+    if time.time() - status.get("timestamp", 0) > max_age:
+        return None
+    return status
+
+
+def collectd_values(status):
+    """[(type-instance, value)] for collectd from a status dict: the hottest
+    temperature per source, and every fan speed and duty."""
+    hottest = {}
+    values = []
+    for row in status["rows"]:
+        value = row["value"]
+        if not isinstance(value, (int, float)):
+            continue
+        if row["type"] == "temperature":
+            hottest[row["source"]] = max(value,
+                                         hottest.get(row["source"], value))
+        elif row["type"] in ("fan", "pwm"):
+            kind = "fanspeed" if row["type"] == "fan" else "percent"
+            name = re.sub(r"[^A-Za-z0-9_]", "_", row["name"])
+            values.append(("%s-%s" % (kind, name), value))
+    return [("temperature-" + src, t)
+            for src, t in sorted(hottest.items())] + values
+
+
+def cmd_collectd(args):
+    """Run under collectd's exec plugin (as nobody); only reads the status
+    file, so it never touches the hardware or wakes disks."""
+    host = os.environ.get("COLLECTD_HOSTNAME", "localhost")
+    interval = max(1, int(float(os.environ.get("COLLECTD_INTERVAL", "60"))))
+    try:
+        while True:
+            # Report nothing while the daemon is stopped: a gap, not a lie.
+            status = read_status(max(30, 3 * interval))
+            for ident, value in collectd_values(status) if status else []:
+                print('PUTVAL "%s/exec-qnap/%s" interval=%d N:%s' %
+                      (host, ident, interval, value), flush=True)
+            time.sleep(interval)
+    except (BrokenPipeError, KeyboardInterrupt):
+        return 0
+
+
+def cmd_status(args):
+    settings = load_settings_or_default()
+    status = read_status(max(30, 3 * settings.interval))
     if status is None:
         # Daemon not running: read live, without waking disks via smartctl.
         hw = Hardware()
@@ -855,6 +946,7 @@ def main(argv=None):
         p.add_argument("--json", action="store_true")
         p.set_defaults(func=func)
     sub.add_parser("failsafe").set_defaults(func=cmd_failsafe)
+    sub.add_parser("collectd").set_defaults(func=cmd_collectd)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(levelname)s: %(message)s")

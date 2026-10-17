@@ -164,9 +164,12 @@ Every `interval` seconds:
 3. **Curve**: for each source `demand = clamp((T − low)/(high − low), 0, 1)`;
    `pwm = minpwm + max(demand) × (maxpwm − minpwm)` (the "max of normalised
    ratios" idea from omv-panq, generalised to N sources).
-4. **Hysteresis**: ramp **up** immediately. Ramp **down** only to the
-   target computed with temperatures + `hysteresis` °C, and by at most
-   16 PWM per cycle.
+4. **Hysteresis**: ramp **up** immediately and remember which source
+   raised the fan and its temperature. Ramp **down** only once that source
+   has cooled by `hysteresis` °C, then by at most 16 PWM per cycle. (The
+   first version inflated *every* source by the hysteresis; on hardware a
+   disk at 39 °C, never the cause, then held the fan at PWM 140 after a CPU
+   burst.)
 5. Write `pwmN` for every PWM group when changed, and at least every 60 s
    (guards against EC resets).
 6. **Fan failure**: `fanN_input` = 0 RPM at PWM ≥ 64 (or invalid 65535) for
@@ -226,8 +229,13 @@ Measured PWM → RPM (15 s per step, `fan-sweep`, OMV idle):
 | Sensor source missing | ignored if others work; all missing → 255 |
 | QM2 card: no slot/NVMe sensor | that card's fan → 255 + fault |
 
-QM2 card fans get the same failsafe (PWM 255) unless `useqm2` is off, in
-which case the plugin never writes to the card.
+QM2 card fans (when `useqm2` is on) return to the card's own controller
+(qm2mod `fan_default`, ≈1200 RPM idle on a QM2-2P-244A-A1) after a **clean**
+stop or restart, and go to PWM 255 after a failure or when `qnapd failsafe`
+is run by hand. With `useqm2` off the daemon hands each card back at start
+and never writes to it again. (Full speed on every restart was a ~5900 RPM
+blast the user could hear on each Apply/upgrade; they chose to trust the
+card's controller.)
 
 Trade-off: disabling the plugin leaves the fan at full speed (loud) until
 reboot. That's deliberate — qnap8528 offers no way to give control back to
@@ -250,9 +258,9 @@ the EC, and loud is better than cooked. The UI hint states this.
   exhausts the whole case.
 - Manual mode applies `manualpwm` to the cards as well.
 - Card fan at 0 RPM for 3 cycles at PWM ≥ 64 → fault → status LED red.
-- **To check on hardware:** whether `fan_default` gives temperature-driven
-  control. If it does, consider it as the "service stopped" behaviour for
-  cards (quieter than 255).
+- `useqm2` (default on) is also the fallback switch: off hands the fan to
+  the card's controller, for users who prefer that or hit compatibility
+  issues. Clean stops hand back too (see §5.3).
 
 ## 6. LED design
 

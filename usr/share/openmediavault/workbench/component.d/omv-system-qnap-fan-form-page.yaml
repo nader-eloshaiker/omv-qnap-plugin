@@ -12,7 +12,7 @@ data:
         method: setFanSettings
     hints:
       - type: info
-        text: _("Requires the qnap8528 kernel driver. When the service stops or fails, the fans are set to full speed.")
+        text: _("Requires the qnap8528 kernel driver. When the service stops or fails, the chassis fans are set to full speed. QM2 card fans return to the card's own controller when the service stops, and run at full speed if it fails.")
     fields:
       - type: checkbox
         name: enable
@@ -94,7 +94,7 @@ data:
         name: useqm2
         label: _("Control QM2 expansion card fans")
         value: true
-        hint: _("Requires the qm2mod driver. Each card fan follows the card's M.2 slot sensors and the NVMe SSDs on that card, using the NVMe temperatures. When unticked the card fan is left to the card.")
+        hint: _("Requires the qm2mod driver. Each card fan follows the card's M.2 slot sensors and the NVMe SSDs on that card, using the NVMe temperatures. Untick to let the card's own controller manage its fan instead, e.g. if you prefer that or there is a compatibility issue.")
       - type: container
         fields:
           - type: numberInput

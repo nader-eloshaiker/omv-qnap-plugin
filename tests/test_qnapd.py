@@ -136,6 +136,18 @@ class TestCurve(unittest.TestCase):
         self.assertEqual(c.next_pwm(100, {"cpu": [40], "system": [20]})[0],
                          100 - qnapd.PWM_MAX_STEP_DOWN)
 
+    def test_other_source_does_not_pin_fan_after_burst(self):
+        c = self.curve(cpulow=40, cpuhigh=80, syslow=30, syshigh=40,
+                       minpwm=0, maxpwm=200, hysteresis=3)
+        # A CPU burst raises the fan; the system sensor sits just inside
+        # its narrow range the whole time.
+        self.assertEqual(c.next_pwm(None, {"cpu": [70], "system": [31]})[0],
+                         150)
+        # CPU back to idle: the fan steps down although system +3 C would
+        # be 80 PWM.
+        self.assertEqual(c.next_pwm(150, {"cpu": [40], "system": [31]})[0],
+                         150 - qnapd.PWM_MAX_STEP_DOWN)
+
     def test_preset_overrides_custom_values(self):
         s = qnapd.Settings({"fanmode": "quiet", "cpulow": 1, "minpwm": 0})
         self.assertEqual(s.ranges["cpu"], qnapd.PRESETS["quiet"]["cpu"])
@@ -326,9 +338,41 @@ class TestQm2(FakeQm2):
         qnapd.failsafe("signal", qm2=True)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "255")
 
+    def test_clean_stop_hands_card_back(self):
+        qnapd.failsafe("success", qm2=True)
+        self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+        self.assertEqual(get(self.root, "devices/platform/qm2.0/fan_default"),
+                         "1")
+        self.assertEqual(get(self.root, self.ec + "/pwm1"), "255")
+
+    def test_disabled_hands_card_back_on_start(self):
+        d = self.daemon(useqm2=False)
+        d.stop.set()
+        d.run()
+        self.assertEqual(get(self.root, "devices/platform/qm2.0/fan_default"),
+                         "1")
+
     def test_failsafe_skips_card_when_disabled(self):
         qnapd.failsafe("signal", qm2=False)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+
+
+class TestCollectd(FakeQm2):
+    def test_values_from_status(self):
+        d = qnapd.Daemon(qnapd.Settings({"usedisk": False}))
+        values = dict(qnapd.collectd_values(d.step(now=0)))
+        self.assertEqual(values["temperature-cpu"], 50.0)
+        self.assertEqual(values["temperature-system"], 38.0)
+        self.assertEqual(values["temperature-nvme"], 70.0)
+        self.assertEqual(values["temperature-qm2"], 45.0)
+        self.assertEqual(values["fanspeed-fan1"], 1300)
+        self.assertEqual(values["fanspeed-qm2_0_fan1"], 1800)
+        self.assertIn("percent-pwm", values)
+        self.assertIn("percent-qm2_0_pwm", values)
+
+    def test_stale_status_ignored(self):
+        qnapd.write_status({"timestamp": 0, "rows": []})
+        self.assertIsNone(qnapd.read_status(60))
 
 
 class TestPackaging(unittest.TestCase):

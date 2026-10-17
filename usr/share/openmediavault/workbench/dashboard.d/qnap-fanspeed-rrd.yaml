@@ -1,0 +1,13 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: 9a3d2b6e-58c4-4f0e-8d1a-7e2c5b9f4a13
+  type: rrd
+  title: _("QNAP fan speed history")
+  description: _("Chassis and QM2 fan speeds over the last day.")
+  permissions:
+    role:
+      - admin
+  rrd:
+    kind: exec-qnap-fanspeed
+    period: day

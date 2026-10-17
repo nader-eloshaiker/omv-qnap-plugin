@@ -1,0 +1,13 @@
+version: "1.0"
+type: component
+data:
+  name: omv-diagnostics-performance-statistics-qnap-rrd-page
+  type: rrdPage
+  config:
+    graphs:
+      - name: exec-qnap-temperature
+        label: _("Temperatures")
+      - name: exec-qnap-fanspeed
+        label: _("Fan speed")
+      - name: exec-qnap-duty
+        label: _("Fan duty")

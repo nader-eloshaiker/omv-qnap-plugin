@@ -58,8 +58,11 @@ Then go to **System › QNAP**:
 2. **Fan control**: tick *Enable*, pick a mode, then Save and Apply.
 3. **Status**: watch the fan speed and temperatures live.
 
-When the service stops or crashes, the fans go to **full speed**. qnap8528
-has no way to hand the fan back to the EC's automatic mode.
+When the service stops or crashes, the chassis fans go to **full speed**:
+qnap8528 has no way to hand the fan back to the EC's automatic mode. QM2 card
+fans go back to the card's own controller on a clean stop (full speed after
+a crash), and you can leave them to the card permanently by unticking
+*Control QM2 expansion card fans*.
 
 ### Reboot hangs
 
