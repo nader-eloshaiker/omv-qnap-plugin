@@ -30,11 +30,13 @@ Sub-commands:
 """
 
 import argparse
+import collections
 import glob
 import json
 import logging
 import os
 import signal
+import statistics
 import subprocess
 import sys
 import threading
@@ -60,6 +62,10 @@ FAN_FAULT_CYCLES = 3
 # at 48). See docs/PLAN.md section 5.2.
 MIN_PWM_CHASSIS = 40
 MIN_PWM_QM2 = 64
+# The curve uses the median CPU temperature over this window, so short load
+# bursts do not spin the fan up while sustained load (more than half the
+# window) still does. The critical check uses raw values.
+CPU_SMOOTH_SECONDS = 60
 # EC temperatures outside this range are treated as junk.
 PLAUSIBLE_TEMP = (5.0, 110.0)
 
@@ -69,15 +75,15 @@ SOURCES = ("cpu", "system", "disk", "nvme")
 # source, the fan starts ramping at "low" and reaches maxpwm at "high".
 PRESETS = {
     "quiet": {
-        "cpu": (50, 85), "system": (35, 50), "disk": (40, 50),
+        "cpu": (60, 90), "system": (35, 50), "disk": (40, 50),
         "nvme": (50, 70), "pwm": (48, 200),
     },
     "normal": {
-        "cpu": (45, 80), "system": (30, 45), "disk": (38, 48),
+        "cpu": (55, 85), "system": (30, 45), "disk": (38, 48),
         "nvme": (45, 65), "pwm": (64, 255),
     },
     "performance": {
-        "cpu": (40, 70), "system": (28, 40), "disk": (35, 45),
+        "cpu": (50, 80), "system": (28, 40), "disk": (35, 45),
         "nvme": (40, 60), "pwm": (100, 255),
     },
 }
@@ -172,8 +178,8 @@ class Settings:
             self.pwm_range = preset["pwm"]
         else:
             self.ranges = {
-                "cpu": (to_int(raw.get("cpulow"), 45),
-                        to_int(raw.get("cpuhigh"), 80)),
+                "cpu": (to_int(raw.get("cpulow"), 55),
+                        to_int(raw.get("cpuhigh"), 85)),
                 "system": (to_int(raw.get("syslow"), 30),
                            to_int(raw.get("syshigh"), 45)),
                 "disk": (to_int(raw.get("disklow"), 38),
@@ -609,6 +615,7 @@ class Daemon:
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
+        self.cpu_history = collections.deque()
         self.zero_rpm = {}
         self.stop = threading.Event()
 
@@ -625,17 +632,31 @@ class Daemon:
                 faults.append("%s not spinning" % name)
         return faults
 
-    def decide(self, zone, readings):
+    def smooth_cpu(self, readings, now):
+        """Return readings with the CPU temperature replaced by its median
+        over the last CPU_SMOOTH_SECONDS."""
+        if not readings.get("cpu"):
+            return readings
+        self.cpu_history.append((now, max(readings["cpu"])))
+        while self.cpu_history[0][0] < now - CPU_SMOOTH_SECONDS:
+            self.cpu_history.popleft()
+        smoothed = dict(readings)
+        smoothed["cpu"] = [statistics.median(t for _, t in
+                                             self.cpu_history)]
+        return smoothed
+
+    def decide(self, zone, readings, raw=None):
         """Return (pwm, reason, faults) for one zone, never below its
-        floor so the fan cannot stall."""
-        pwm, reason, faults = self._decide(zone, readings)
+        floor so the fan cannot stall. Critical limits are checked against
+        the raw (unsmoothed) readings."""
+        pwm, reason, faults = self._decide(zone, readings, raw or readings)
         return max(pwm, zone.floor), reason, faults
 
-    def _decide(self, zone, readings):
-        src = self.curve.critical(readings)
+    def _decide(self, zone, readings, raw):
+        src = self.curve.critical(raw)
+        if src:
+            return PWM_MAX, "critical %s temperature" % src, []
         if self.settings.fanmode == "manual":
-            if src:
-                return PWM_MAX, "critical %s temperature" % src, []
             return self.settings.manualpwm, "manual", []
         if not any(temps for src, temps in readings.items()
                    if self.settings.use.get(src)):
@@ -663,7 +684,8 @@ class Daemon:
     def step(self, now=None):
         now = time.monotonic() if now is None else now
         readings, rows = collect(self.hw, self.settings, self.disks, now)
-        pwm, reason, faults = self.decide(self.chassis, readings)
+        pwm, reason, faults = self.decide(
+            self.chassis, self.smooth_cpu(readings, now), readings)
         faults += self.apply(self.chassis, pwm, reason, self.hw.set_pwm, now)
         faults += self.check_fans(self.hw.fans(), self.chassis.pwm)
 

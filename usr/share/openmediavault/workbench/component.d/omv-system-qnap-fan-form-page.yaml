@@ -150,7 +150,7 @@ data:
           - type: numberInput
             name: cpulow
             label: _("CPU ramp-up temperature (°C)")
-            value: 45
+            value: 55
             validators:
               min: 0
               max: 110
@@ -166,7 +166,7 @@ data:
           - type: numberInput
             name: cpuhigh
             label: _("CPU full-speed temperature (°C)")
-            value: 80
+            value: 85
             validators:
               min: 0
               max: 110

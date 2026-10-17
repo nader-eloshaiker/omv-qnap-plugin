@@ -179,9 +179,18 @@ Every `interval` seconds:
 
 | Mode | CPU °C | System °C | Disk °C | NVMe °C | PWM range |
 |-|-|-|-|-|-|
-| Quiet | 50→85 | 35→50 | 40→50 | 50→70 | 48–200 |
-| Normal | 45→80 | 30→45 | 38→48 | 45→65 | 64–255 |
-| Performance | 40→70 | 28→40 | 35→45 | 40→60 | 100–255 |
+| Quiet | 60→90 | 35→50 | 40→50 | 50→70 | 48–200 |
+| Normal | 55→85 | 30→45 | 38→48 | 45→65 | 64–255 |
+| Performance | 50→80 | 28→40 | 35→45 | 40→60 | 100–255 |
+
+CPU ranges were raised 10 °C after testing, and the curve uses the
+**median** CPU temperature over 60 s (`CPU_SMOOTH_SECONDS`); a 30 s mean
+was tried first and still let frequent spikes drag the fan up. With 45→80 and raw
+readings, bursty background load (J4125 package spiking to 60–68 °C for a
+sample, idle 45–52 °C) sawtoothed the chassis fan between PWM 128 and 217,
+which the user could hear. Intel's only thermal spec for the J4125 is
+T<sub>junction</sub> 105 °C. The critical check (90 °C) still uses the raw
+reading.
 
 Notes: the TS-253D has a J4125 (Tjmax 105 °C) and one 70 mm fan, rated
 for 0–40 °C ambient. Disks are the thermally sensitive part of a NAS

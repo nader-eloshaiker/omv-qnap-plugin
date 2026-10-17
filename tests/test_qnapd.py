@@ -161,6 +161,35 @@ class TestDaemon(FakeSysfs):
         d = self.daemon(fanmode="manual", manualpwm=90)
         self.assertEqual(d.step(now=0)["pwm"], 90)
 
+    def test_cpu_burst_is_smoothed(self):
+        d = self.daemon(fanmode="normal", usesystem=False)
+        d.step(now=0)  # CPU 50
+        put(self.root, "class/hwmon/hwmon1/temp1_input", "70000")
+        # Average of 50 and 70 is 60: (60-55)/(85-55) of 64..255 -> 96,
+        # where the raw 70 would give 160.
+        self.assertEqual(d.step(now=10)["pwm"], 96)
+
+    def test_cpu_spikes_ignored_sustained_load_not(self):
+        d = self.daemon(fanmode="normal", usesystem=False)
+        cpu = "class/hwmon/hwmon1/temp1_input"
+        for i, t in enumerate((50, 50, 50, 75, 50)):
+            put(self.root, cpu, t * 1000)
+            status = d.step(now=i * 10)
+        self.assertEqual(status["pwm"], 64)  # a single spike is ignored
+        for i in range(5, 10):
+            put(self.root, cpu, "75000")
+            status = d.step(now=i * 10)
+        # Sustained 75 C: (75-55)/(85-55) of 64..255 -> 191.
+        self.assertEqual(status["pwm"], 191)
+
+    def test_cpu_critical_uses_raw_reading(self):
+        d = self.daemon(fanmode="normal", usesystem=False)
+        d.step(now=0)
+        put(self.root, "class/hwmon/hwmon1/temp1_input", "95000")
+        status = d.step(now=10)
+        self.assertEqual(status["pwm"], 255)
+        self.assertEqual(status["reason"], "critical cpu temperature")
+
     def test_manual_pwm_never_below_floor(self):
         d = self.daemon(fanmode="manual", manualpwm=10)
         self.assertEqual(d.step(now=0)["pwm"], qnapd.MIN_PWM_CHASSIS)

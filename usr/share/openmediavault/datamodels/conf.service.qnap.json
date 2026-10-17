@@ -54,13 +54,13 @@
 			"type": "integer",
 			"minimum": 0,
 			"maximum": 110,
-			"default": 45
+			"default": 55
 		},
 		"cpuhigh": {
 			"type": "integer",
 			"minimum": 0,
 			"maximum": 110,
-			"default": 80
+			"default": 85
 		},
 		"usesystem": {
 			"type": "boolean",
