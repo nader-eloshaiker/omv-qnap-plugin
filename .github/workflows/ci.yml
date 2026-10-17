@@ -1,0 +1,114 @@
+# Unit tests, static checks and the .deb, in the same Debian release OMV 8
+# runs on. No hardware involved; see docs/build-and-release.md.
+# Pushing a tag v<version> also publishes a GitHub release with the .deb.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            git ca-certificates build-essential debhelper fakeroot lintian \
+            python3 python3-yaml php-cli >/dev/null
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tag matches debian/changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(dpkg-parsechangelog -S Version)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, but debian/changelog is $version"
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: make test
+
+      - name: PHP syntax
+        run: |
+          for f in usr/share/openmediavault/engined/*/*.inc; do
+            php -l "$f"
+          done
+
+      - name: JSON and YAML
+        run: |
+          python3 - <<'EOF'
+          import glob, json, yaml
+          files = glob.glob("usr/**/*.json", recursive=True)
+          for f in files:
+              json.load(open(f))
+          print(f"{len(files)} JSON files ok")
+          files = glob.glob("usr/share/openmediavault/workbench/**/*.yaml", recursive=True)
+          for f in files:
+              yaml.safe_load(open(f))
+          print(f"{len(files)} YAML files ok")
+          EOF
+
+      - name: Shell syntax
+        run: |
+          for f in debian/postinst debian/postrm debian/preinst debian/prerm \
+                   usr/share/openmediavault/confdb/*/*.sh; do
+            [ -e "$f" ] || continue
+            sh -n "$f" && echo "$f ok"
+          done
+
+      - name: Build .deb
+        run: |
+          dpkg-buildpackage -us -uc -b
+          mkdir -p dist
+          mv ../*.deb ../*.buildinfo ../*.changes dist/
+          # Release notes: the newest debian/changelog entry.
+          awk 'NR > 2 && /^ -- / { exit } NR > 2 { sub(/^  /, ""); print }' \
+            debian/changelog > dist/release-notes.md
+
+      - name: Lintian
+        run: lintian --fail-on error dist/*.changes
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: openmediavault-qnap-deb
+          path: |
+            dist/*.deb
+            dist/release-notes.md
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: openmediavault-qnap-deb
+          path: dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.deb \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file dist/release-notes.md

@@ -9,7 +9,11 @@ make deb           # same, on a Debian 13 host with debhelper installed
 make deploy NAS=root@NAS_HOST   # copy dist/*.deb to a NAS and install it (tools/nas-deploy.sh)
 ```
 
-Extra checks before committing (CI does not exist yet):
+Extra checks before committing. CI (`.github/workflows/ci.yml`) runs all of
+these in `debian:trixie` on every push and pull request, plus shell syntax,
+the build and lintian (`--fail-on error`; the two known warnings are
+`no-manual-page` and `uses-implicit-await-trigger`), and uploads the .deb as
+a workflow artifact:
 
 ```sh
 docker run --rm -v "$PWD":/r:ro php:8.2-cli php -l /r/usr/share/openmediavault/engined/rpc/qnap.inc
@@ -81,8 +85,14 @@ brings nothing for an `Architecture: all` package. Keep `__pycache__` out of
 2. `make test`, the extra checks, `make docker-deb`.
 3. Deploy to a test NAS and run the relevant parts of
    [testing/hardware-testing.md](testing/hardware-testing.md).
-4. Tick the items in PLAN.md, commit, tag `v<version>`, attach the .deb to
-   a GitHub release.
+4. Tick the items in PLAN.md, commit, push, then
+   `git tag v<version> && git push origin v<version>`. CI checks the tag
+   matches `debian/changelog`, builds, and publishes the GitHub release
+   with the .deb; the notes are the changelog entry.
+
+`debian/changelog` is the single source of the version (migrations are
+named after it when the feature is written), so releases are tag-driven
+rather than generated from commit messages.
 
 Commit messages: imperative subject, a body explaining why; no tool
 attribution trailers.
