@@ -323,7 +323,16 @@ user, not just the LED. Options, in order of preference:
   - *(Phase 2)* **Disks** — slot table with Locate toggle.
   - *(Phase 3)* **Buttons** — button actions.
 - Dashboard: grid widget "QNAP fans & temperatures" (10 s).
-- *(Later)* RRD graphs via collectd exec plugin (see openmediavault-cputemp).
+- *(Phase 2)* **Performance graphs** (fan RPM, duty, temperatures per zone)
+  following openmediavault-tempmon's collectd-exec → mkrrdgraph pattern
+  (see `reference/omv-plugin-conventions.md`). The exec script only reads
+  `/run/qnapd/status.json` (world-readable). That means no sudo rule and no
+  extra EC/smartctl polling, unlike tempmon, which runs each sensor script
+  every interval *and* on every dashboard refresh. Useful for tuning and
+  for the 48 h soak (PWM churn).
+- Users already running tempmon with qnap8528/smartctl scripts duplicate
+  the EC polling, and wake disks if `smartctl` lacks `-n standby`. Document
+  this, and point them at `qnapd status --json` instead.
 - Only workbench features common to OMV 7 and 8 are used.
 
 ## 10. Packaging & platform
@@ -399,6 +408,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] LED brightness night schedule
 - [ ] OMV notifications for faults
 - [ ] Optional per-PWM-group curves for multi-fan models
+- [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
 - [ ] confdb migration for new fields
 
 ### Phase 3 — Buttons & sounds

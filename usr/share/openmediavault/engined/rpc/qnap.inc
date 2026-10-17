@@ -116,7 +116,13 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	{
 		$cmd = new \OMV\System\Process(array_merge(["/usr/sbin/qnapd"], $args));
 		$cmd->setQuiet(TRUE);
-		$cmd->execute($output, $exitStatus);
+		// execute() throws on a non-zero exit status; the UI should show
+		// "not loaded"/empty rows rather than an error dialog.
+		try {
+			$cmd->execute($output, $exitStatus);
+		} catch (\Exception $e) {
+			return [];
+		}
 		if (0 !== $exitStatus) {
 			return [];
 		}

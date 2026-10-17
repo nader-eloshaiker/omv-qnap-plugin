@@ -20,7 +20,12 @@ set -e
 . /usr/share/openmediavault/scripts/helper-functions
 
 # QM2 expansion card support (qnap-qm2 / qm2mod).
-omv_config_add_key "/config/services/qnap" "useqm2" "1"
-omv_config_add_key "/config/services/qnap" "loadqm2" "0"
+xpath="/config/services/qnap"
+if ! omv_config_exists "${xpath}/useqm2"; then
+	omv_config_add_key "${xpath}" "useqm2" "1"
+fi
+if ! omv_config_exists "${xpath}/loadqm2"; then
+	omv_config_add_key "${xpath}" "loadqm2" "0"
+fi
 
 exit 0
