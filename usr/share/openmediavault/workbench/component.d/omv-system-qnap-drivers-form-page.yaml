@@ -1,0 +1,50 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-drivers-form-page
+  type: formPage
+  config:
+    request:
+      service: Qnap
+      get:
+        method: getHardwareSettings
+      post:
+        method: setDriverSettings
+    fields:
+      - type: textInput
+        name: driverstatus
+        label: _("qnap8528 driver")
+        readonly: true
+        submitValue: false
+      - type: checkbox
+        name: loadmodule
+        label: _("Load the qnap8528 module at boot")
+        value: false
+        hint: _("The driver must already be installed (e.g. via DKMS).")
+      - type: checkbox
+        name: skiphwcheck
+        label: _("Skip the chip ID check (skip_hw_check)")
+        value: false
+        hint: _("Only needed if the driver fails to load because the chip ID check fails (see dmesg). Takes effect when the module is next loaded.")
+        modifiers:
+          - type: visible
+            constraint:
+              operator: truthy
+              arg0:
+                prop: loadmodule
+      - type: textInput
+        name: qm2cards
+        label: _("QM2 expansion cards")
+        readonly: true
+        submitValue: false
+      - type: checkbox
+        name: loadqm2
+        label: _("Load the qm2mod module at boot")
+        value: false
+        hint: _("For QM2 cards, using the qnap-qm2 driver (https://github.com/0xGiddi/qnap-qm2), which must already be installed.")
+    buttons:
+      - template: submit
+      - template: cancel
+        execute:
+          type: url
+          url: "/system/qnap"

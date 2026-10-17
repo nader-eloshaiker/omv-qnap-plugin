@@ -1,0 +1,8 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "system.qnap.drivers"
+  text: _("Drivers")
+  position: 50
+  icon: "mdi:chip"
+  url: "/system/qnap/drivers"

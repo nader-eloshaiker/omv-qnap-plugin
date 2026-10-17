@@ -53,10 +53,13 @@ apt install ./openmediavault-qnap_<version>_all.deb
 
 Then go to **System › QNAP**:
 
-1. **Hardware**: confirm the driver shows as *Loaded*. Optionally tick
-   *Load the qnap8528 module at boot* and *Skip the chip ID check*.
+1. **Drivers**: confirm the driver shows as *Loaded*. Optionally tick
+   *Load the qnap8528 module at boot* (and *qm2mod* for QM2 cards).
 2. **Fan control**: tick *Enable*, pick a mode, then Save and Apply.
 3. **Status**: watch the fan speed and temperatures live.
+4. **Front panel** / **Power**: status LED and brightness; power recovery,
+   EuP mode and `reboot=efi`.
+5. **System**: model, serial number and firmware versions.
 
 When the service stops or crashes, the chassis fans go to **full speed**:
 qnap8528 has no way to hand the fan back to the EC's automatic mode. QM2 card
@@ -66,7 +69,7 @@ a crash), and you can leave them to the card permanently by unticking
 
 ### Reboot hangs
 
-Some QNAP x86 units hang on reboot under Linux. Ticking **Hardware ›
+Some QNAP x86 units hang on reboot under Linux. Ticking **Power ›
 Use the EFI reboot method** adds `reboot=efi` to the kernel command line.
 The plugin writes this to `/etc/default/grub.d/openmediavault-qnap.cfg` and
 runs `update-grub`, so your own `/etc/default/grub` is not edited. The

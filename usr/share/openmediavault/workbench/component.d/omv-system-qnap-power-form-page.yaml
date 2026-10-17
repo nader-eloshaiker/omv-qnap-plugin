@@ -1,0 +1,49 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-power-form-page
+  type: formPage
+  config:
+    request:
+      service: Qnap
+      get:
+        method: getHardwareSettings
+      post:
+        method: setPowerSettings
+    fields:
+      - type: select
+        name: powerrecovery
+        label: _("After a power failure")
+        value: unchanged
+        store:
+          data:
+            - ["unchanged", _("Do not change")]
+            - ["off", _("Stay off")]
+            - ["on", _("Power on")]
+            - ["last", _("Restore previous state")]
+      - type: select
+        name: eupmode
+        label: _("EuP mode")
+        value: unchanged
+        hint: _("When enabled, standby power is minimised; Wake-on-LAN and power recovery are unavailable.")
+        store:
+          data:
+            - ["unchanged", _("Do not change")]
+            - ["off", _("Disabled")]
+            - ["on", _("Enabled")]
+      - type: checkbox
+        name: rebootefi
+        label: _("Use the EFI reboot method (reboot=efi)")
+        value: false
+        hint: _("Adds reboot=efi to the kernel command line via /etc/default/grub.d and runs update-grub. Fixes reboots hanging on several QNAP models. Takes effect after the next reboot; GRUB only.")
+      - type: textInput
+        name: rebootefiactive
+        label: _("reboot=efi active in running kernel")
+        readonly: true
+        submitValue: false
+    buttons:
+      - template: submit
+      - template: cancel
+        execute:
+          type: url
+          url: "/system/qnap"

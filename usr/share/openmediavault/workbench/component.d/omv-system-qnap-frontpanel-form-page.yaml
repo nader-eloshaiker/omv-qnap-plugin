@@ -1,0 +1,38 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-frontpanel-form-page
+  type: formPage
+  config:
+    request:
+      service: Qnap
+      get:
+        method: getHardwareSettings
+      post:
+        method: setFrontPanelSettings
+    fields:
+      - type: checkbox
+        name: ledstatus
+        label: _("Drive the status LED")
+        value: true
+        hint: _("Green when healthy, red on a fan or sensor fault, blinking red if the service fails.")
+      - type: numberInput
+        name: ledbrightness
+        label: _("LED brightness (%)")
+        value: 100
+        validators:
+          min: 0
+          max: 100
+          patternType: integer
+          required: true
+      - type: textInput
+        name: leds
+        label: _("Available LEDs")
+        readonly: true
+        submitValue: false
+    buttons:
+      - template: submit
+      - template: cancel
+        execute:
+          type: url
+          url: "/system/qnap"

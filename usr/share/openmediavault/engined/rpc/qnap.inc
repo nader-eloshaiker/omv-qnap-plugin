@@ -28,7 +28,9 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("getSettings");
 		$this->registerMethod("setFanSettings");
 		$this->registerMethod("getHardwareSettings");
-		$this->registerMethod("setHardwareSettings");
+		$this->registerMethod("setFrontPanelSettings");
+		$this->registerMethod("setPowerSettings");
+		$this->registerMethod("setDriverSettings");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
 	}
@@ -83,10 +85,28 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		return $result;
 	}
 
-	public function setHardwareSettings($params, $context)
+	/**
+	 * One setter per page (Front panel, Power, Drivers); each validates and
+	 * stores only that page's fields. They share getHardwareSettings.
+	 */
+	public function setFrontPanelSettings($params, $context)
 	{
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
-		$this->validateMethodParams($params, "rpc.qnap.sethardwaresettings");
+		$this->validateMethodParams($params, "rpc.qnap.setfrontpanelsettings");
+		return $this->setSubset($params);
+	}
+
+	public function setPowerSettings($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$this->validateMethodParams($params, "rpc.qnap.setpowersettings");
+		return $this->setSubset($params);
+	}
+
+	public function setDriverSettings($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$this->validateMethodParams($params, "rpc.qnap.setdriversettings");
 		return $this->setSubset($params);
 	}
 

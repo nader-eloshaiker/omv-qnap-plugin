@@ -31,18 +31,36 @@
 	},
 	{
 		"type": "rpc",
-		"id": "rpc.qnap.sethardwaresettings",
+		"id": "rpc.qnap.setfrontpanelsettings",
 		"params": {
 			"type": "object",
 			"properties": {
 				"ledstatus": { "type": "boolean", "required": true },
-				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true },
+				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true }
+			}
+		}
+	},
+	{
+		"type": "rpc",
+		"id": "rpc.qnap.setpowersettings",
+		"params": {
+			"type": "object",
+			"properties": {
 				"powerrecovery": { "type": "string", "enum": ["unchanged", "off", "on", "last"], "required": true },
 				"eupmode": { "type": "string", "enum": ["unchanged", "off", "on"], "required": true },
+				"rebootefi": { "type": "boolean", "required": true }
+			}
+		}
+	},
+	{
+		"type": "rpc",
+		"id": "rpc.qnap.setdriversettings",
+		"params": {
+			"type": "object",
+			"properties": {
 				"loadmodule": { "type": "boolean", "required": true },
 				"skiphwcheck": { "type": "boolean", "required": true },
-				"loadqm2": { "type": "boolean", "required": true },
-				"rebootefi": { "type": "boolean", "required": true }
+				"loadqm2": { "type": "boolean", "required": true }
 			}
 		}
 	}

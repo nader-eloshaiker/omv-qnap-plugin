@@ -3,6 +3,6 @@ type: navigation-item
 data:
   path: "system.qnap.system"
   text: _("System")
-  position: 40
+  position: 60
   icon: "mdi:information-outline"
   url: "/system/qnap/system"

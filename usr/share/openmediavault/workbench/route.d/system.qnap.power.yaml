@@ -1,0 +1,7 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/power"
+  title: _("Power")
+  editing: true
+  component: omv-system-qnap-power-form-page

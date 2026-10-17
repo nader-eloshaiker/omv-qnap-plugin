@@ -1,0 +1,7 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/drivers"
+  title: _("Drivers")
+  editing: true
+  component: omv-system-qnap-drivers-form-page

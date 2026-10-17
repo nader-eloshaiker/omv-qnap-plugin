@@ -61,7 +61,7 @@ on these facts:
 ```
 ┌──────────────── OMV workbench (Angular, YAML-defined) ────────────────┐
 │ System › QNAP › Status (datatable, 5 s)   Fan control (form)          │
-│                 Hardware (form)           Dashboard widget (grid)     │
+│   Front panel · Power · Drivers (forms) · System (device info)        │
 └───────────────┬───────────────────────────────────────────────────────┘
                 │ JSON-RPC  (service "Qnap")
 ┌───────────────▼──────────────┐   Save → confdb → module "qnap" dirty
@@ -116,8 +116,10 @@ is awkward to generate and validate from the OMV UI.
 One singleton datamodel, `conf.service.qnap` (xpath `//services/qnap`),
 defaults defined only in
 [`conf.service.qnap.json`](../usr/share/openmediavault/datamodels/conf.service.qnap.json).
-Two RPC write methods (`setFanSettings`, `setHardwareSettings`) each own a
-subset so that each form page posts only its own fields.
+One RPC write method per form page (`setFanSettings`,
+`setFrontPanelSettings`, `setPowerSettings`, `setDriverSettings`) each owns
+a subset, so each page posts only its own fields; the last three share
+`getHardwareSettings`.
 
 | Field | Type / default | Page | Phase |
 |-|-|-|-|
@@ -130,15 +132,15 @@ subset so that each form page posts only its own fields.
 | `{cpu,sys,disk,nvme}{low,high}` | °C | Fan (custom) | 1 |
 | `diskinterval` | 10–3600 s / 60 | Fan | 1 |
 | `useqm2` | bool / true — drive QM2 card fans | Fan | 1 (7.0.1) |
-| `ledstatus` | bool / true | Hardware | 1 |
-| `ledbrightness` | 0–100 / 100 | Hardware | 1 |
-| `powerrecovery` | unchanged\|off\|on\|last | Hardware | 1 |
-| `eupmode` | unchanged\|off\|on | Hardware | 1 |
-| `loadmodule`, `skiphwcheck` | bool / false | Hardware | 1 |
-| `loadqm2` | bool / false — load `qm2mod` at boot | Hardware | 1 (7.0.1) |
-| `rebootefi` | bool / false | Hardware | 1 |
-| `leddisk` (activity/error/locate) | bool | Hardware | 2 |
-| `ledschedule` (night brightness + times) | | Hardware | 2 |
+| `ledstatus` | bool / true | Front panel | 1 |
+| `ledbrightness` | 0–100 / 100 | Front panel | 1 |
+| `powerrecovery` | unchanged\|off\|on\|last | Power | 1 |
+| `eupmode` | unchanged\|off\|on | Power | 1 |
+| `loadmodule`, `skiphwcheck` | bool / false | Drivers | 1 |
+| `loadqm2` | bool / false — load `qm2mod` at boot | Drivers | 1 (7.0.1) |
+| `rebootefi` | bool / false | Power | 1 |
+| `leddisk` (activity/error/locate) | bool | Front panel | 2 |
+| `ledschedule` (night brightness + times) | | Front panel | 2 |
 | `copyaction`, `copycommand` | none\|command | Buttons | 3 |
 | `resetaction`, `resetcommand`, `resethold` | none\|command, 3 s | Buttons | 3 |
 | `beeper` (events) | bool | Buttons | 3 |
@@ -352,9 +354,13 @@ user, not just the LED. Options, in order of preference:
     source; auto-reload 5 s.
   - **Fan control** — enable, mode, interval, sources, custom curve
     (fields shown only for *Custom*), manual PWM.
-  - **Hardware** — driver status/board codes/EC firmware/LED list
-    (read-only), module loading + `skip_hw_check`, status LED, brightness,
-    power recovery, EuP, `reboot=efi`.
+  - **Front panel** — status LED, brightness, available LEDs (Phase 2:
+    disk LEDs, night schedule).
+  - **Power** — power recovery, EuP, `reboot=efi` (+ whether it is active).
+  - **Drivers** — qnap8528 / qm2mod status, load at boot, `skip_hw_check`.
+  - **System** — model, serial number, BIOS, EC firmware, manufacture
+    date, board codes, QM2 cards (read-only). The first version had one
+    *Hardware* form for the first three; split into tabs on request.
   - *(Phase 2)* **Disks** — slot table with Locate toggle.
   - *(Phase 3)* **Buttons** — button actions.
 - Dashboard: grid widget "QNAP fans & temperatures" (10 s).
@@ -394,7 +400,7 @@ user, not just the LED. Options, in order of preference:
   (`GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT} reboot=efi"`),
   `update-grub` only on change. Never edits `/etc/default/grub`. If the
   user already added `reboot=efi` there by hand, the duplicate is harmless;
-  the Hardware page shows whether it is active in `/proc/cmdline`.
+  the Power page shows whether it is active in `/proc/cmdline`.
   *To check:* systems booting via systemd-boot (rare on OMV) are not covered.
 - Distribution: GitHub releases first; later propose to omv-extras.
 
@@ -437,7 +443,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
       OMV spindown enabled)
 - [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink
-- [x] QM2 card fan zones (qm2mod), `loadqm2`, Hardware page card info
+- [x] QM2 card fan zones (qm2mod), `loadqm2`, card info (Drivers / System pages)
 - [ ] Disk source: the TS-253D boots from a USB SSD (`sdc`, non-removable)
       that lands in the HDD temperature range; decide whether SSD/USB
       disks belong in `disk` (or the NVMe range)
@@ -496,7 +502,7 @@ user, not just the LED. Options, in order of preference:
 | Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |
 | No buzzer interface | Defer; investigate pcspkr / EC |
 | OMV 7 vs 8 UI drift | Stick to the common subset; CI on both |
-| Driver load fails on unknown model → UI just says "Not loaded" | Show dmesg hint in the Hardware page (later) |
+| Driver load fails on unknown model → UI just says "Not loaded" | Show dmesg hint on the Drivers page (later) |
 
 ## 15. References
 
