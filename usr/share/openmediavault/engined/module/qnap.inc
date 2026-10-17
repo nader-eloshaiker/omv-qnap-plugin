@@ -17,7 +17,8 @@
  */
 
 class OMVModuleQnap extends \OMV\Engine\Module\ServiceAbstract
-	implements \OMV\Engine\Notify\IListener, \OMV\Engine\Module\IServiceStatus
+	implements \OMV\Engine\Notify\IListener, \OMV\Engine\Module\IServiceStatus,
+		\OMV\Engine\Module\INotification
 {
 	/**
 	 * Must match the salt state directory srv/salt/omv/deploy/qnap.
@@ -45,9 +46,29 @@ class OMVModuleQnap extends \OMV\Engine\Module\ServiceAbstract
 		];
 	}
 
+	/**
+	 * System > Notification > Events entry. qnapd mails root (forwarded
+	 * to the configured address) only while this and email are enabled.
+	 */
+	public function getNotificationConfig()
+	{
+		return [[
+			"id" => "qnap",
+			"type" => gettext("Hardware"),
+			"title" => gettext("QNAP hardware (fans, temperatures, disks, pools)")
+		]];
+	}
+
 	public function bindListeners(\OMV\Engine\Notify\Dispatcher $dispatcher)
 	{
 		$dispatcher->addListener(OMV_NOTIFY_MODIFY,
 			"org.openmediavault.conf.service.qnap", [$this, "setDirty"]);
+		// The notify flag in qnapd.json follows the notification settings.
+		$dispatcher->addListener(OMV_NOTIFY_MODIFY,
+			"org.openmediavault.conf.system.notification.email",
+			[$this, "setDirty"]);
+		$dispatcher->addListener(OMV_NOTIFY_MODIFY,
+			"org.openmediavault.conf.system.notification.notification",
+			[$this, "setDirty"]);
 	}
 }

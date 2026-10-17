@@ -3,6 +3,10 @@ openmediavault-qnap (8.0.3) stable; urgency=low
   * Night brightness: a lower front panel LED brightness between two
     times of day (Front panel page; off by default), with a confdb
     migration.
+  * Fault notifications: a "QNAP hardware" event under System >
+    Notification. When enabled, qnapd mails when a fan, temperature, disk
+    or pool problem lasts a minute, when it clears, and if the daemon
+    stops unexpectedly.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:44:37 +1100
 

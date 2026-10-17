@@ -43,6 +43,22 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 Reads shell out to `qnapd status|info --json` via `\OMV\System\Process`,
 wrapped in `try/catch` because `execute()` throws on a non-zero exit.
 
+## Notifications
+
+The engine module implements `INotification`: *System › Notification ›
+Events* lists "QNAP hardware" (id `qnap`, type Hardware). The salt state
+renders `notify: true` into `/etc/qnapd/qnapd.json` when OMV email is
+enabled and that event is on (on when never saved), and the module
+re-applies when either setting changes. qnapd then mails `root`
+(`/usr/sbin/sendmail -t`; OMV's postfix maps root to the notification
+address):
+
+- when a problem has lasted 60 s (`Notifier.HOLD_SECONDS`): fan or sensor
+  fault, critical temperature, a disk failed (S.M.A.R.T. or faulted
+  member), a pool or array degraded / rebuilding / failed, a volume full;
+- once when the problems clear;
+- from `qnapd failsafe` when the daemon stopped unexpectedly.
+
 ## Engine module (`engined/module/qnap.inc`)
 
 `getName()` must equal the salt directory (`qnap`). Implements

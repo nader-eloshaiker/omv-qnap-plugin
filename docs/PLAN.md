@@ -512,8 +512,10 @@ user, not just the LED. Options, in order of preference:
 - [ ] LED brightness night schedule (8.0.3; implemented 2026-10-18 on
       branch feature/night-schedule, unit-tested, hardware check pending)
 - [ ] OMV notifications for faults: fan failure, critical temperature,
-      disk/array fault, daemon failure; research how OMV 8 registers a
-      plugin notification type (8.0.3)
+      disk/array fault, daemon failure (8.0.3; implemented 2026-10-18 on
+      branch feature/night-schedule: `INotification` event "QNAP
+      hardware", salt renders `notify`, qnapd mails root; unit-tested,
+      hardware check pending)
 - [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
       (implemented in 894f070; verify on hardware and tick)
 - [ ] confdb migrations: 8.0.2 (`volumefull`), 8.0.3 (night schedule,

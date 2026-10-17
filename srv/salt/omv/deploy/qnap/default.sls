@@ -14,6 +14,14 @@
 # along with openmediavault-qnap. If not, see <http://www.gnu.org/licenses/>.
 
 {% set config = salt['omv_conf.get']('conf.service.qnap') %}
+# Fault mails: OMV email on and the "qnap" event enabled (enabled when the
+# event has never been saved, as the Notification page shows it).
+{% set email_config = salt['omv_conf.get']('conf.system.notification.email') %}
+{% set notification = salt['omv_conf.get_by_filter'](
+  'conf.system.notification.notification',
+  {'operator': 'stringEquals', 'arg0': 'id', 'arg1': 'qnap'}) %}
+{% set _ = config.update({'notify': (email_config.enable | to_bool) and
+  (notification | length == 0 or notification[0].enable | to_bool)}) %}
 {% set ec_dir = '/sys/devices/platform/qnap8528/ec' %}
 {% set power_recovery = {'off': 0, 'on': 1, 'last': 2} %}
 {% set eup_mode = {'off': 0, 'on': 1} %}
