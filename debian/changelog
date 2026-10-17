@@ -1,3 +1,13 @@
+openmediavault-qnap (8.0.0) stable; urgency=low
+
+  * Target OpenMediaVault 8 (Debian 13) only: version 8.x per the
+    omv-extras convention (major = OMV major), Depends openmediavault
+    (>= 8), Build-Depends debhelper-compat (= 13), built on Trixie.
+    Validated on a TS-253D with a QM2-2P-244A-A1. OMV 7 would need its
+    own 7.x release line.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 19:58:05 +1100
+
 openmediavault-qnap (7.0.2) stable; urgency=low
 
   * Disk LEDs: green when present, blinking on activity, red on a

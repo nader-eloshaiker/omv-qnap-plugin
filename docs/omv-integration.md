@@ -1,6 +1,6 @@
 # OMV integration
 
-How the plugin hooks into openmediavault 7/8. Generic OMV plugin rules
+How the plugin hooks into openmediavault 8. Generic OMV plugin rules
 are in [reference/omv-plugin-conventions.md](reference/omv-plugin-conventions.md);
 this page is what *this* plugin does and what was verified on OMV 8.5.
 

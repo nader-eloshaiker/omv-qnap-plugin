@@ -8,7 +8,7 @@ It does not use QNAP's proprietary binaries.
 Primary target is the **TS-253D**. Any model supported by qnap8528 should
 work, because all hardware is discovered at runtime.
 
-> **Status: early development (7.0.x, alpha quality).** Phase 1 is scaffolded and
+> **Status: early development (8.0.x, alpha quality).** Phase 1 is scaffolded and
 > unit-tested but not yet validated on hardware. See
 > [docs/PLAN.md](docs/PLAN.md).
 
@@ -31,8 +31,8 @@ work, because all hardware is discovered at runtime.
 
 ## Requirements
 
-- OpenMediaVault 8 (Debian 13), tested on a TS-253D. OMV 7 (Debian 12) is
-  targeted but untested.
+- OpenMediaVault 8 (Debian 13), tested on a TS-253D. OMV 7 is not
+  supported (it would need a separate 7.x release line).
 - The **qnap8528 driver installed** (DKMS):
 
   ```sh
@@ -80,7 +80,7 @@ change takes effect after the next reboot.
 ```sh
 make test                      # unit tests against a fake sysfs (any OS with python3)
 make docker-deb                # build dist/*.deb in Docker (macOS or any host)
-make deb                       # or on a Debian 12/13 host with debhelper
+make deb                       # or on a Debian 13 host with debhelper
 make deploy NAS=root@NAS_HOST  # install on a test NAS over SSH
 ```
 

@@ -4,12 +4,12 @@
 test:
 	python3 -m unittest discover -s tests -v
 
-# Requires a Debian 12/13 build host: apt install build-essential debhelper fakeroot
+# Requires a Debian 13 build host: apt install build-essential debhelper fakeroot
 deb:
 	dpkg-buildpackage -us -uc -b
 
 # Build on any Docker host (e.g. macOS); the .deb lands in dist/.
-DEBIAN_IMAGE ?= debian:bookworm
+DEBIAN_IMAGE ?= debian:trixie
 docker-deb:
 	mkdir -p dist
 	docker run --rm -v "$(CURDIR)":/src:ro -v "$(CURDIR)/dist":/dist $(DEBIAN_IMAGE) sh -ec '\

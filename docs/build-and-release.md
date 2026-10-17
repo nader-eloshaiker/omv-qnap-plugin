@@ -4,8 +4,8 @@
 
 ```sh
 make test          # unit tests (python3 -m unittest), no hardware needed
-make docker-deb    # build dist/openmediavault-qnap_<version>_all.deb in debian:bookworm
-make deb           # same, on a Debian 12/13 host with debhelper installed
+make docker-deb    # build dist/openmediavault-qnap_<version>_all.deb in debian:trixie
+make deb           # same, on a Debian 13 host with debhelper installed
 make deploy NAS=root@NAS_HOST   # copy dist/*.deb to a NAS and install it (tools/nas-deploy.sh)
 ```
 
@@ -22,7 +22,9 @@ failing `make test` will not stop the build.
 
 ## Versions
 
-- Native package, version `7.0.N` (major = OMV major, omv-extras style).
+- Native package, version `8.0.N`: major = OMV major (omv-extras style).
+  The plugin targets OMV 8 only; 7.0.x were pre-releases. OMV 7 support
+  would be a separate 7.x release line with its own testing.
 - **Versions must be PEP 440 compatible: digits and dots only.**
   `omv-confdbadm migrate` parses the previous version and every migration
   file name with Python `packaging.version`; `7.0~alpha2` failed every
@@ -66,8 +68,11 @@ datamodel via `confdb/create.d/conf.service.qnap.sh` instead.
 ## Packaging layout
 
 `Architecture: all`; `debian/install` copies `srv/` and `usr/`;
-`debian/openmediavault-qnap.qnapd.service` is the unit; debhelper compat 13
-so one source builds on Bookworm and Trixie. Keep `__pycache__` out of
+`debian/openmediavault-qnap.qnapd.service` is the unit (installed to
+`/usr/lib/systemd/system` on Trixie). `Build-Depends: debhelper-compat
+(= 13)`: stock Trixie's debhelper (13.24) provides up to 13; compat 14,
+which some OMV 8 plugins use, needs debhelper from trixie-backports and
+brings nothing for an `Architecture: all` package. Keep `__pycache__` out of
 `usr/` (tests set `sys.dont_write_bytecode`).
 
 ## Releasing

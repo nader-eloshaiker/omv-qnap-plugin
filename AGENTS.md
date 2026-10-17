@@ -1,6 +1,6 @@
 # AGENTS.md
 
-openmediavault-qnap: an OpenMediaVault 7/8 plugin for fan control, LEDs
+openmediavault-qnap: an OpenMediaVault 8 plugin for fan control, LEDs
 and hardware settings on QNAP NAS devices (and QM2 expansion cards), built
 on the open source qnap8528 and qnap-qm2 kernel drivers. A Python daemon
 (`usr/sbin/qnapd`) owns the hardware; OMV (PHP RPC, salt, YAML workbench)
@@ -22,8 +22,9 @@ unsure.
 4. **Never wake sleeping disks**: `smartctl -n standby`, `/sys/block/*/stat`,
    `zpool status`; never `drivetemp`.
 5. **Fail safe**: stopped or crashed daemon → chassis fans full speed.
-6. **Versions are PEP 440** (`7.0.N`, no `~`). New config fields need a
-   version bump and a confdb migration. Defaults live only in the datamodel.
+6. **Versions are PEP 440** (`8.0.N`; major = OMV major; no `~`). New
+   config fields need a version bump and a confdb migration. Defaults live
+   only in the datamodel.
 7. **Hardware actions need the owner's consent** (stalling fans, killing the
    daemon, reboots, EC power settings). Agents never type passwords.
 8. Run `make test` before every build; use `set -o pipefail` when piping it.

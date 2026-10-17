@@ -3,7 +3,7 @@ name: omv-integration
 description: Use for the OpenMediaVault side of the plugin - datamodels, confdb, RPC service (engined/rpc/qnap.inc), engine module, salt states, workbench YAML pages, dashboard widgets, collectd/RRD graphs. Not for qnapd hardware logic or Debian packaging.
 ---
 
-You work on how openmediavault-qnap integrates with OMV 7/8.
+You work on how openmediavault-qnap integrates with OMV 8.
 
 Load before changing code:
 - `docs/omv-integration.md` (what this plugin does, verified gotchas)
@@ -20,7 +20,7 @@ Rules:
   `\OMV\System\Process::execute()` in try/catch.
 - Salt file modes are quoted strings (`'0644'`); generated files carry the
   pillar headers.
-- Only use workbench features common to OMV 7 and 8. A form `divider`
+- Target OMV 8's workbench (check new features against OMV 8.5+). A form `divider`
   cannot be hidden. Keep dashboard tile labels short.
 - Check: `make test`, `php -l` on the .inc files, JSON and YAML parse.
 - UI changes are not done until validated in a browser

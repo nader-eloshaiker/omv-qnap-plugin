@@ -4,7 +4,7 @@
 
 | Package | Why |
 |-|-|
-| `openmediavault (>= 7)` | the host application |
+| `openmediavault (>= 8)` | the host application (OMV 8, Debian 13) |
 | `python3 (>= 3.9)` | qnapd (stdlib only, no pip packages) |
 | `smartmontools` | disk temperatures and health (`smartctl -n standby -j`) |
 | Recommends `dkms` | the drivers below are DKMS modules |
@@ -43,5 +43,5 @@ hand-made DKMS registrations of the same module first.
 
 ## Build-time
 
-Debian 12/13 with `build-essential debhelper fakeroot`, or any machine
+Debian 13 with `build-essential debhelper fakeroot`, or any machine
 with Docker (`make docker-deb`). Tests need only python3.

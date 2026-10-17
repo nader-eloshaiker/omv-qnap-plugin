@@ -10,7 +10,8 @@ Load before changing anything:
 - `docs/dependencies.md` (runtime deps, drivers, kernel headers)
 
 Rules:
-- Versions are PEP 440 (`7.0.N`): `omv-confdbadm migrate` rejects `~`.
+- Versions are PEP 440 (`8.0.N`, major = OMV major): `omv-confdbadm
+  migrate` rejects `~`.
   `TestPackaging` enforces it.
 - `dh_installsystemd --no-enable --no-start`: salt owns enable/start. The
   postinst must `systemctl daemon-reload` itself before `try-restart`.

@@ -23,9 +23,9 @@ Example field: `leddisk` (bool, Front panel page).
    Salt already renders every config key into `/etc/qnapd/qnapd.json`.
 5. **Salt**, only if the setting changes system files
    (`srv/salt/omv/deploy/qnap/default.sls`).
-6. **Version and migration**: new `debian/changelog` entry `7.0.N+1`
+6. **Version and migration**: new `debian/changelog` entry `8.0.N+1`
    (PEP 440), and
-   `confdb/migrations.d/conf.service.qnap_7.0.N+1.sh` (mode 755) adding
+   `confdb/migrations.d/conf.service.qnap_8.0.N+1.sh` (mode 755) adding
    the key idempotently with `omv_config_exists` / `omv_config_add_key`
    (booleans as `1`/`0`).
 7. **Tests** in `tests/test_qnapd.py` for the behaviour; `TestPackaging`

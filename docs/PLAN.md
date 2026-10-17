@@ -132,13 +132,13 @@ a subset, so each page posts only its own fields; the last three share
 | `use{cpu,system,disk,nvme}` | bool / true | Fan | 1 |
 | `{cpu,sys,disk,nvme}{low,high}` | °C | Fan (custom) | 1 |
 | `diskinterval` | 10–3600 s / 60 | Fan | 1 |
-| `useqm2` | bool / true — drive QM2 card fans | Fan | 1 (7.0.1) |
+| `useqm2` | bool / true — drive QM2 card fans | Fan | 1 |
 | `ledstatus` | bool / true | Front panel | 1 |
 | `ledbrightness` | 0–100 / 100 | Front panel | 1 |
 | `powerrecovery` | unchanged\|off\|on\|last | Power | 1 |
 | `eupmode` | unchanged\|off\|on | Power | 1 |
 | `loadmodule`, `skiphwcheck` | bool / false | Drivers | 1 |
-| `loadqm2` | bool / false — load `qm2mod` at boot | Drivers | 1 (7.0.1) |
+| `loadqm2` | bool / false — load `qm2mod` at boot | Drivers | 1 |
 | `rebootefi` | bool / **true** (fixes reboot hangs; on for new installs) | Power | 1 |
 | `leddisk` (activity/error/locate) | bool | Front panel | 2 |
 | `ledschedule` (night brightness + times) | | Front panel | 2 |
@@ -245,7 +245,7 @@ reboot. That's deliberate — qnap8528 offers no way to give control back to
 the EC, and loud is better than cooked. The UI hint states this.
 *Open question:* add a user-chosen "speed when stopped" (default 255)?
 
-### 5.4 QM2 expansion cards (Phase 1, 7.0.1)
+### 5.4 QM2 expansion cards (Phase 1)
 
 - Discovery: every hwmon named `qm2`, re-scanned each cycle, because
   `qm2mod` may load after `qnapd`. Card identity is in `hwmonX/device/` (`qm2.N`: `model`, `serial`, `pic_version`).
@@ -375,22 +375,23 @@ user, not just the LED. Options, in order of preference:
 - Users already running tempmon with qnap8528/smartctl scripts duplicate
   the EC polling, and wake disks if `smartctl` lacks `-n standby`. Document
   this, and point them at `qnapd status --json` instead.
-- Only workbench features common to OMV 7 and 8 are used.
+- Targets OMV 8's workbench (validated on OMV 8.5).
 
 ## 10. Packaging & platform
 
 - Package `openmediavault-qnap`, `Architecture: all`, native version
-  `7.0.N` (omv-extras convention: major = OMV major). **Versions must be
+  `8.0.N` (omv-extras convention: major = OMV major; 7.0.x were
+  pre-releases). **Versions must be
   PEP 440 compatible** (no tilde pre-releases): `omv-confdbadm migrate`
   parses the old version and the migration file names with
   `packaging.version`.
-- `Depends: openmediavault (>= 7), python3, smartmontools`;
+- `Depends: openmediavault (>= 8), python3, smartmontools`;
   `Recommends: dkms`. **No hard dependency on the drivers** (they have no
   .deb yet); the UI shows "Not loaded" and the daemon refuses to start
   without the hwmon device.
-- One source tree for OMV 7 (Bookworm) and 8 (Trixie): debhelper compat
-  13, quoted salt file modes, no OMV 8-only UI features. Branch into
-  `7.x`/`main` (omv-extras style) only when the two diverge.
+- OMV 8 (Debian 13 Trixie) only, `debhelper-compat (= 13)` (stock Trixie
+  debhelper), built in `debian:trixie`. OMV 7 would get its own `7.x`
+  branch and release line if there is demand (omv-extras style).
 - `qnapd.service` is installed with `--no-enable --no-start`; salt owns
   enable/start (`service.running` / `service.dead`), restarting on config
   change via `watch`.
@@ -427,7 +428,7 @@ user, not just the LED. Options, in order of preference:
 
 ### Phase 0 — Repo bootstrap ✅
 - [x] Research (this doc + `docs/reference/`)
-- [x] Package skeleton builds on Debian 12, lintian clean except benign tags
+- [x] Package skeleton builds (now on Debian 13), lintian clean except benign tags
 - [x] Unit tests for daemon logic against a fake sysfs
 
 ### Phase 1 — Fan control MVP (scaffolded, needs hardware validation)
@@ -461,8 +462,8 @@ user, not just the LED. Options, in order of preference:
       disks belong in `disk` (or the NVMe range)
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
-- [ ] Test on OMV 7 (Bookworm)
-- [ ] GitHub Actions: build .deb in `debian:bookworm` + `debian:trixie`,
+- [x] Target OMV 8 only, version 8.0.0 (OMV 7 dropped, 2026-10-17)
+- [ ] GitHub Actions: build .deb in `debian:trixie`,
       run unit tests, lintian, `php -l`
 
 ### Phase 2 — QTS-like LEDs & health
@@ -503,7 +504,7 @@ user, not just the LED. Options, in order of preference:
 - **Unit** (`make test`): fake sysfs tree emulating a TS-253D
   (`QNAPD_SYSFS_ROOT`); covers discovery, junk filtering, curve,
   hysteresis, critical, manual mode, fan-failure LED, failsafe, info.
-- **Package**: build + lintian in Debian 12/13 containers; `php -l`.
+- **Package**: build + lintian in a Debian 13 container; `php -l`.
 - **Integration on hardware** (manual checklist in Phase 1): fresh install,
   upgrade, purge; Save/Apply; daemon restart on config change; reboot with
   `loadmodule`; failsafe on crash; `reboot=efi` toggling.
@@ -522,7 +523,7 @@ user, not just the LED. Options, in order of preference:
 | qnap8528 not packaged; kernel upgrades need DKMS rebuild | Recommend dkms + headers; Phase 4 packaging |
 | Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |
 | No buzzer interface | Defer; investigate pcspkr / EC |
-| OMV 7 vs 8 UI drift | Stick to the common subset; CI on both |
+| OMV 8.x workbench changes | Validate the UI after OMV updates (validate-ui runbook) |
 | Driver load fails on unknown model → UI just says "Not loaded" | Show dmesg hint on the Drivers page (later) |
 
 ## 15. References

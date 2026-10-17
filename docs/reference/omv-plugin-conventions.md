@@ -22,8 +22,7 @@ collectd/RRD graphs and salt-generated workbench files.
 
 | Path | Role |
 |-|-|
-| `debian/control` | `Architecture: all`, `XB-Plugin-Section`, `Depends: openmediavault (>= 7)` |
-| `debian/compat` = 13 | Works on Bookworm and Trixie builders (OMV 8 plugins use `debhelper-compat (= 14)` instead) |
+| `debian/control` | `Architecture: all`, `XB-Plugin-Section`, `Depends: openmediavault (>= 8)`, `Build-Depends: debhelper-compat (= 13)` |
 | `debian/triggers` | `activate restart-engined` |
 | `debian/postinst` | `dpkg-trigger update-workbench`, `omv-confdbadm create/migrate`, `omv-salt deploy run` |
 | `debian/postrm` | purge → `omv_config_delete` (not omv-confdbadm; the model is already gone) |
