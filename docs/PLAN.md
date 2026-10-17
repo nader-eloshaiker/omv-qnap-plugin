@@ -17,7 +17,8 @@ provides, without QNAP's proprietary code:
 - **QM2 expansion cards** (via qnap-qm2): card fan control from the
   card's own sensors (Phase 1) and per-slot LEDs (Phase 2).
 
-Primary target: **TS-253D**, with and without a QM2 card. Secondary:
+Primary target: **TS-253D** on OMV 8 (the reference box runs OMV 8.5 on
+Debian 13 with the Proxmox kernel), with and without a QM2 card. Secondary:
 anything supported by [qnap8528](https://github.com/0xGiddi/qnap8528)
 (≈120 models). QM2 cards via [qnap-qm2](https://github.com/0xGiddi/qnap-qm2)
 are a first-class target, not an add-on.
@@ -42,7 +43,7 @@ on these facts:
 | Finding | Consequence |
 |-|-|
 | qnap8528 exposes **only manual PWM** (`pwmN`, 0–255, no `pwmN_enable`), no way to return the fan to EC auto mode | The plugin **must** run a control loop and must fail safe to full speed |
-| TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`; ENE EC → needs `skip_hw_check=true` | Expose `skip_hw_check` in the UI; TS-253D is the reference config |
+| TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`, EC temps `temp1`/`temp6` only. The reference unit (qnap8528 1.24) **passes the IT8528 chip check without `skip_hw_check`** | Keep `skip_hw_check` in the UI as an escape hatch, not a TS-253D requirement |
 | hwmon index is not stable (`hwmon3` on one box, `hwmonN` on another) | Always discover devices by `name` |
 | EC temps include junk channels (e.g. `temp11=2°C` on TS-464); "CPU" EC temps may be bogus on x86 | Filter implausible values; use coretemp/k10temp for CPU |
 | Button codes: source says `BTN_1`=USB Copy, `BTN_2`=Reset (**README says the opposite**); `BTN_0`=chassis open; power button is ACPI | Verify with `evtest` on hardware before Phase 3 |
@@ -128,13 +129,13 @@ subset so that each form page posts only its own fields.
 | `use{cpu,system,disk,nvme}` | bool / true | Fan | 1 |
 | `{cpu,sys,disk,nvme}{low,high}` | °C | Fan (custom) | 1 |
 | `diskinterval` | 10–3600 s / 60 | Fan | 1 |
-| `useqm2` | bool / true — drive QM2 card fans | Fan | 1 (7.0~alpha2) |
+| `useqm2` | bool / true — drive QM2 card fans | Fan | 1 (7.0.1) |
 | `ledstatus` | bool / true | Hardware | 1 |
 | `ledbrightness` | 0–100 / 100 | Hardware | 1 |
 | `powerrecovery` | unchanged\|off\|on\|last | Hardware | 1 |
 | `eupmode` | unchanged\|off\|on | Hardware | 1 |
 | `loadmodule`, `skiphwcheck` | bool / false | Hardware | 1 |
-| `loadqm2` | bool / false — load `qm2mod` at boot | Hardware | 1 (7.0~alpha2) |
+| `loadqm2` | bool / false — load `qm2mod` at boot | Hardware | 1 (7.0.1) |
 | `rebootefi` | bool / false | Hardware | 1 |
 | `leddisk` (activity/error/locate) | bool | Hardware | 2 |
 | `ledschedule` (night brightness + times) | | Hardware | 2 |
@@ -207,7 +208,7 @@ reboot. That's deliberate — qnap8528 offers no way to give control back to
 the EC, and loud is better than cooked. The UI hint states this.
 *Open question:* add a user-chosen "speed when stopped" (default 255)?
 
-### 5.4 QM2 expansion cards (Phase 1, 7.0~alpha2)
+### 5.4 QM2 expansion cards (Phase 1, 7.0.1)
 
 - Discovery: every hwmon named `qm2`, re-scanned each cycle, because
   `qm2mod` may load after `qnapd`. Card identity is in `hwmonX/device/` (`qm2.N`: `model`, `serial`, `pic_version`).
@@ -338,7 +339,10 @@ user, not just the LED. Options, in order of preference:
 ## 10. Packaging & platform
 
 - Package `openmediavault-qnap`, `Architecture: all`, native version
-  `7.0~alpha1` (omv-extras convention: major = OMV major).
+  `7.0.N` (omv-extras convention: major = OMV major). **Versions must be
+  PEP 440 compatible** (no tilde pre-releases): `omv-confdbadm migrate`
+  parses the old version and the migration file names with
+  `packaging.version`.
 - `Depends: openmediavault (>= 7), python3, smartmontools`;
   `Recommends: dkms`. **No hard dependency on the drivers** (they have no
   .deb yet); the UI shows "Not loaded" and the daemon refuses to start
@@ -368,8 +372,9 @@ user, not just the LED. Options, in order of preference:
 - Multi-fan models: qnap8528 has up to 4 PWM groups. Phase 1 drives all
   groups with the same PWM. *Phase 2 option:* per-group curves (e.g. CPU
   fan vs disk fans on TS-x73A / TVS models).
-- Models needing `skip_hw_check`: TS-253D, TS-453D, TS-464, TS-464EU,
-  TR-464, Qu-X05 (ENE EC) — called out in the UI hint.
+- `skip_hw_check`: listed upstream for TS-453D, TS-464, TS-464EU, TR-464,
+  Qu-X05. The reference TS-253D passed the chip check without it, so the
+  UI hint only says to use it when dmesg shows the check failing.
 - QM2 cards: fan zone per card (Phase 1, §5.4); slot LEDs from NVMe
   presence/health (Phase 2). The QM2-2S10G1TB02 is not supported by
   qm2mod (EC-attached), so it will not show up.
@@ -388,7 +393,7 @@ user, not just the LED. Options, in order of preference:
 - [x] `qnapd`: discovery, curve, presets, hysteresis, critical, failsafe
 - [x] Status LED (ok / fault / starting / service failed)
 - [x] Panel brightness, power recovery, EuP, module loading, `reboot=efi`
-- [ ] Install on a TS-253D with OMV 7: verify every page, Save/Apply flow,
+- [ ] Install on a TS-253D (OMV 8.5 / Debian 13): verify every page, Save/Apply flow,
       dashboard widget, service status in *Diagnostics › Services*
 - [ ] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
@@ -397,7 +402,7 @@ user, not just the LED. Options, in order of preference:
 - [x] QM2 card fan zones (qm2mod), `loadqm2`, Hardware page card info
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
-- [ ] Test on OMV 8 (Trixie)
+- [ ] Test on OMV 7 (Bookworm)
 - [ ] GitHub Actions: build .deb in `debian:bookworm` + `debian:trixie`,
       run unit tests, lintian, `php -l`
 

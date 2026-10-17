@@ -7,6 +7,7 @@ import importlib.machinery
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -79,6 +80,11 @@ class TestHardware(FakeSysfs):
     def test_cpu_prefers_package(self):
         self.assertEqual(qnapd.Hardware().cpu_temps(),
                          [("cpu", "Package id 0", 50.0)])
+
+    def test_read_strips_nul_padding(self):
+        put(self.root, "vpd", "70-0Q05H0201" + "\0" * 21)
+        self.assertEqual(qnapd.read(os.path.join(self.root, "vpd")),
+                         "70-0Q05H0201")
 
     def test_junk_rpm(self):
         put(self.root, self.ec + "/fan1_input", "65535")
@@ -265,6 +271,24 @@ class TestQm2(FakeQm2):
     def test_failsafe_skips_card_when_disabled(self):
         qnapd.failsafe("signal", qm2=False)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+
+
+class TestPackaging(unittest.TestCase):
+    """omv-confdbadm migrate parses versions with packaging.version."""
+
+    PEP440ISH = re.compile(r"^\d+(\.\d+)*$")
+
+    def test_changelog_version(self):
+        with open(os.path.join(HERE, os.pardir, "debian", "changelog")) as f:
+            version = re.match(r"\S+ \(([^)]+)\)", f.readline()).group(1)
+        self.assertRegex(version, self.PEP440ISH)
+
+    def test_migration_versions(self):
+        d = os.path.join(HERE, os.pardir, "usr", "share", "openmediavault",
+                         "confdb", "migrations.d")
+        for name in os.listdir(d):
+            version = name.rsplit("_", 1)[1][:-len(".sh")]
+            self.assertRegex(version, self.PEP440ISH, name)
 
 
 class TestInfo(FakeSysfs):

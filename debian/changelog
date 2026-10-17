@@ -1,3 +1,14 @@
+openmediavault-qnap (7.0.1) stable; urgency=low
+
+  * Use PEP 440 compatible version numbers: omv-confdbadm rejects
+    Debian pre-release versions (7.0~alpha2), which broke upgrades.
+    Still alpha quality.
+  * Strip NUL padding from qnap8528 VPD strings.
+  * Use the OMV 8 datamodel xpath form (.//services/qnap).
+  * skip_hw_check is not needed on the TS-253D; reword the hint.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 16:24:07 +1100
+
 openmediavault-qnap (7.0~alpha2) stable; urgency=low
 
   * Fan control for QM2 expansion cards via the qnap-qm2 (qm2mod) driver:

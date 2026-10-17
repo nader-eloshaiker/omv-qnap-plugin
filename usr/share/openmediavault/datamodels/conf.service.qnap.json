@@ -3,7 +3,7 @@
 	"id": "conf.service.qnap",
 	"title": "QNAP hardware",
 	"queryinfo": {
-		"xpath": "//services/qnap",
+		"xpath": ".//services/qnap",
 		"iterable": false
 	},
 	"properties": {

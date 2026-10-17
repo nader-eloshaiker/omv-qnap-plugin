@@ -42,7 +42,7 @@ data:
         name: skiphwcheck
         label: _("Skip the chip ID check (skip_hw_check)")
         value: false
-        hint: _("Required on models with an ENE embedded controller, e.g. TS-253D, TS-453D, TS-464. Takes effect when the module is next loaded.")
+        hint: _("Only needed if the driver fails to load because the chip ID check fails (see dmesg). Takes effect when the module is next loaded.")
         modifiers:
           - type: visible
             constraint:

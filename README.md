@@ -8,7 +8,7 @@ It does not use QNAP's proprietary binaries.
 Primary target is the **TS-253D**. Any model supported by qnap8528 should
 work, because all hardware is discovered at runtime.
 
-> **Status: early development (7.0~alpha2).** Phase 1 is scaffolded and
+> **Status: early development (7.0.x, alpha quality).** Phase 1 is scaffolded and
 > unit-tested but not yet validated on hardware. See
 > [docs/PLAN.md](docs/PLAN.md).
 
@@ -31,14 +31,15 @@ work, because all hardware is discovered at runtime.
 
 ## Requirements
 
-- OpenMediaVault 7 (Debian 12). OMV 8 is targeted but untested.
+- OpenMediaVault 8 (Debian 13), tested on a TS-253D. OMV 7 (Debian 12) is
+  targeted but untested.
 - The **qnap8528 driver installed** (DKMS):
 
   ```sh
   apt install build-essential dkms git linux-headers-$(uname -r)
   git clone https://github.com/0xGiddi/qnap8528.git && cd qnap8528
   make install
-  modprobe qnap8528 skip_hw_check=true   # TS-253D / TS-453D / TS-464 need skip_hw_check
+  modprobe qnap8528     # add skip_hw_check=true only if dmesg shows the chip ID check failing
   ```
 
 - For QM2 cards: the [qnap-qm2](https://github.com/0xGiddi/qnap-qm2)

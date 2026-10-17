@@ -29,7 +29,9 @@ case "$1" in
         echo "Updating configuration database ..."
         omv-confdbadm create "conf.service.qnap"
         if [ -n "$2" ]; then
-            omv-confdbadm migrate "conf.service.qnap" "${2}"
+            # omv-confdbadm only accepts PEP 440 versions, so drop a Debian
+            # pre-release suffix such as 7.0~alpha2.
+            omv-confdbadm migrate "conf.service.qnap" "${2%%~*}"
         fi
 
         omv-salt deploy run --no-color --quiet qnap || :

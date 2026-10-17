@@ -93,8 +93,9 @@ def sysfs(*parts):
 def read(path):
     try:
         with open(path, "r") as f:
-            # qnap8528's own attributes have no trailing newline.
-            return f.read().strip()
+            # qnap8528's own attributes have no trailing newline; its VPD
+            # strings are NUL padded.
+            return f.read().replace("\0", "").strip()
     except OSError:
         return None
 

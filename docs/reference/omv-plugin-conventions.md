@@ -43,6 +43,9 @@ collectd/RRD graphs and salt-generated workbench files.
   avoid `": "` inside `_()` strings (or quote the whole scalar).
 - Salt file modes: quote them (`mode: '0644'`) — required on OMV 8's Salt.
 - `\OMV\System\Process` does not escape arguments; validate input.
+- Package versions and `migrations.d/<id>_<version>.sh` names must be
+  PEP 440 versions: `omv-confdbadm migrate` uses `packaging.version`, so
+  `7.0~alpha2` fails with "No valid version" (verified on OMV 8.5).
 - Form `container` fields have no control, so put `modifiers` on the inner
   fields (as done for the custom-curve fields).
 - Read-only computed fields in a form: `readonly: true`, `submitValue: false`.
