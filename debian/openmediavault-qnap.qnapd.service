@@ -18,6 +18,9 @@ ExecStopPost=/usr/sbin/qnapd failsafe
 Restart=always
 RestartSec=10
 RuntimeDirectory=qnapd
+# Keep locate.json (Locate requests) across restarts; a stale status.json
+# is ignored by its timestamp.
+RuntimeDirectoryPreserve=yes
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

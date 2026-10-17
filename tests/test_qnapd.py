@@ -409,6 +409,13 @@ class TestQm2(FakeQm2):
         leds.poll(now=3)
         self.assertEqual((get(self.root, green + "brightness"),
                           get(self.root, red + "brightness")), ("0", "1"))
+        # Locate: red 1 blinked by the timer (red 2, PIC blink, stays dark).
+        put(self.root, "run/locate.json",
+            json.dumps({"qm2.0-slot1": qnapd.time.time() + 600}))
+        leds.poll(now=4)
+        self.assertEqual((get(self.root, green + "brightness"),
+                          get(self.root, red + "brightness"),
+                          get(self.root, red + "trigger")), ("0", "1", "timer"))
 
     def test_swapped_generic_card(self):
         card, = qnapd.Hardware.qm2_cards()

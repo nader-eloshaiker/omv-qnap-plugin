@@ -829,13 +829,16 @@ class DiskLeds:
                 self.blink(led)
             return
         green, red = leds
-        # qm2mod: red 2 makes the card's PIC blink it (locate).
+        # qm2mod's red 2 (PIC blink) stays dark on the QM2-2P-244A-A1, so
+        # Locate blinks red 1 with the timer trigger, like activity.
         write(os.path.join(red, "brightness"),
-              {"error": 1, "locate": 2}.get(state, 0))
+              1 if state in ("error", "locate") else 0)
         write(os.path.join(green, "brightness"),
               1 if state in ("on", "active") else 0)
         if state == "active":
             self.blink(green)
+        elif state == "locate":
+            self.blink(red)
 
     def poll(self, now=None):
         now = time.monotonic() if now is None else now

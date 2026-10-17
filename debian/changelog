@@ -14,6 +14,9 @@ openmediavault-qnap (8.0.2) stable; urgency=low
     hardware (TS-253D). Elsewhere the kernel blinked them in software
     through the EC (e.g. TS-877), flooding the EC; bays there now show
     present/error, and locate still blinks.
+  * QM2 Locate blinks red with the timer trigger: the card's own blink
+    (qm2mod red 2) leaves the LED dark on the QM2-2P-244A-A1.
+  * Locate requests survive a qnapd restart (RuntimeDirectoryPreserve).
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:41:55 +1100
 
