@@ -16,6 +16,11 @@ data:
         label: _("Drive the status LED")
         value: true
         hint: _("Green when healthy, red on a fan or sensor fault, blinking red if the service fails.")
+      - type: checkbox
+        name: leddisk
+        label: _("Drive the disk LEDs")
+        value: true
+        hint: _("Green when a disk is present, blinking on disk activity, red on a S.M.A.R.T. failure or when a ZFS pool or RAID array has faulted the disk. Sleeping disks are not woken.")
       - type: numberInput
         name: ledbrightness
         label: _("LED brightness (%)")

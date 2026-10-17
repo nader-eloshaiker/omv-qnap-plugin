@@ -177,6 +177,7 @@ class Settings:
         self.hysteresis = max(0, to_int(raw.get("hysteresis"), 3))
         self.diskinterval = max(10, to_int(raw.get("diskinterval"), 60))
         self.ledstatus = to_bool(raw.get("ledstatus", True))
+        self.leddisk = to_bool(raw.get("leddisk", True))
         self.ledbrightness = min(100, max(0, to_int(
             raw.get("ledbrightness"), 100)))
         self.use = {src: to_bool(raw.get("use" + src, True))
@@ -386,6 +387,9 @@ class DiskTemps:
         self.interval = interval
         self.last = None
         self.cache = []
+        # Disks whose last S.M.A.R.T. overall health check failed. Disks in
+        # standby keep their previous verdict.
+        self.failed = set()
 
     def get(self, now):
         if self.last is None or now - self.last >= self.interval:
@@ -407,15 +411,185 @@ class DiskTemps:
         for dev in self.devices():
             try:
                 proc = subprocess.run(
-                    ["smartctl", "-n", "standby", "-A", "-j", "/dev/" + dev],
+                    ["smartctl", "-n", "standby", "-A", "-H", "-j",
+                     "/dev/" + dev],
                     capture_output=True, text=True, timeout=20)
                 data = json.loads(proc.stdout or "{}")
             except (OSError, subprocess.SubprocessError, ValueError):
                 continue
-            temp = (data.get("temperature") or {}).get("current")
-            if isinstance(temp, (int, float)):
-                result.append((dev, dev, float(temp)))
+            temp, passed = parse_smart(data)
+            if temp is not None:
+                result.append((dev, dev, temp))
+            if passed is False:
+                self.failed.add(dev)
+            elif passed is True:
+                self.failed.discard(dev)
         return result
+
+
+def parse_smart(data):
+    """(temperature or None, health True/False/None) from smartctl -j."""
+    temp = (data.get("temperature") or {}).get("current")
+    temp = float(temp) if isinstance(temp, (int, float)) else None
+    passed = (data.get("smart_status") or {}).get("passed")
+    return temp, passed if isinstance(passed, bool) else None
+
+
+def disk_name(path):
+    """sda for /dev/sda1, nvme0n1 for /dev/nvme0n1p1."""
+    match = re.match(r"(nvme\d+n\d+|[a-z]+?d[a-z]+)",
+                     os.path.basename(path))
+    return match.group(1) if match else None
+
+
+def zfs_faulted(text):
+    """Disks that are not ONLINE, or have read/write/checksum errors, in
+    `zpool status -LP` output."""
+    result = set()
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) >= 5 and fields[0].startswith("/dev/"):
+            state, counters = fields[1], fields[2:5]
+            if state != "ONLINE" or any(c != "0" for c in counters):
+                name = disk_name(fields[0])
+                if name:
+                    result.add(name)
+    return result
+
+
+def md_faulty(text):
+    """Disks marked faulty (F) in /proc/mdstat."""
+    return {disk_name(m) for m in re.findall(r"(\w+)\[\d+\]\(F\)", text)
+            if disk_name(m)}
+
+
+def array_faults():
+    """Disks a ZFS pool or md array considers faulted. Both read in-kernel
+    state, so sleeping disks are not woken."""
+    result = md_faulty(read("/proc/mdstat") or "")
+    try:
+        proc = subprocess.run(["zpool", "status", "-LP"], capture_output=True,
+                              text=True, timeout=20)
+        result |= zfs_faulted(proc.stdout)
+    except (OSError, subprocess.SubprocessError):
+        pass  # No ZFS.
+    return result
+
+
+class DiskLeds:
+    """Front disk LEDs (qnap8528::hddN, 0 off, 1 green, 2 red), QTS style:
+    green when a disk is present, blinking green on I/O, red when S.M.A.R.T.
+    fails or a ZFS/md array has faulted the disk, off for an empty bay.
+
+    Bay N is the disk on SATA port N (ataN), so it survives sdX renaming
+    (verified on a TS-253D: hdd1 = ata1, hdd2 = ata2). Activity comes from
+    /sys/block/<disk>/stat, which never wakes a sleeping disk. A thread polls
+    it; it is the only writer of these LEDs.
+    """
+
+    POLL_SECONDS = 0.25
+    # Keep blinking this long after the last I/O, so short bursts show.
+    ACTIVE_HOLD_SECONDS = 1.0
+    # Inside qnap8528's hardware blink window for disk LEDs (80-140 ms).
+    BLINK_MS = 100
+
+    def __init__(self):
+        self.slots = []
+        self.errors = set()
+        self.counters = {}
+        self.last_io = {}
+        self.shown = {}
+        self.stop = threading.Event()
+        self.thread = None
+        self.discover()
+
+    def discover(self):
+        slots = []
+        for led in sorted(glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")),
+                          key=lambda p: index_of(p, DRIVER + "::hdd")):
+            port = index_of(led, DRIVER + "::hdd")
+            slots.append((led, self.disk_on_port(port)))
+        self.slots = slots
+
+    @staticmethod
+    def disk_on_port(port):
+        marker = "%sata%d%s" % (os.sep, port, os.sep)
+        for block in sorted(glob.glob(sysfs("block", "sd*"))):
+            if marker in os.path.realpath(block):
+                return os.path.basename(block)
+        return None
+
+    def update(self, errors):
+        """Called from the control loop: rediscover bays (hot swap) and set
+        the disks to show as failed."""
+        self.discover()
+        self.errors = set(errors)
+
+    def state(self, dev, now):
+        if dev is None:
+            return "off"
+        if dev in self.errors:
+            return "error"
+        stat = (read(sysfs("block", dev, "stat")) or "").split()
+        if len(stat) >= 9:
+            ios = int(stat[0]) + int(stat[4])
+            if self.counters.get(dev) not in (None, ios) or stat[8] != "0":
+                self.last_io[dev] = now
+            self.counters[dev] = ios
+        if now - self.last_io.get(dev, -1e9) < self.ACTIVE_HOLD_SECONDS:
+            return "active"
+        return "on"
+
+    def show(self, led, state):
+        brightness = {"off": 0, "on": 1, "active": 1, "error": 2}[state]
+        write(os.path.join(led, "trigger"), "none")
+        write(os.path.join(led, "brightness"), brightness)
+        if state == "active":
+            write(os.path.join(led, "trigger"), "timer")
+            for name in ("delay_on", "delay_off"):
+                path = os.path.join(led, name)
+                if os.path.exists(path):
+                    write(path, self.BLINK_MS)
+
+    def poll(self, now=None):
+        now = time.monotonic() if now is None else now
+        for led, dev in self.slots:
+            state = self.state(dev, now)
+            if self.shown.get(led) == state:
+                continue
+            try:
+                self.show(led, state)
+                self.shown[led] = state
+            except OSError as e:
+                if state == "active":
+                    # No timer trigger: stay solid green.
+                    self.shown[led] = state
+                else:
+                    log.warning("Cannot set %s: %s", led, e)
+
+    def start(self):
+        def loop():
+            while not self.stop.wait(self.POLL_SECONDS):
+                try:
+                    self.poll()
+                except Exception:
+                    log.exception("Disk LED update failed")
+        self.thread = threading.Thread(target=loop, name="disk-leds",
+                                       daemon=True)
+        self.thread.start()
+
+    def finish(self):
+        """Stop blinking and leave the present/error colours."""
+        self.stop.set()
+        if self.thread:
+            self.thread.join(2)
+        now = time.monotonic()
+        for led, dev in self.slots:
+            state = self.state(dev, now)
+            try:
+                self.show(led, "on" if state == "active" else state)
+            except OSError:
+                pass
 
 
 class StatusLed:
@@ -653,8 +827,11 @@ class Daemon:
         self.settings = settings
         self.hw = Hardware()
         self.curve = FanCurve(settings)
+        # Disk temperatures also carry S.M.A.R.T. health for the disk LEDs.
         self.disks = DiskTemps(settings.diskinterval) \
-            if settings.use["disk"] else None
+            if settings.use["disk"] or settings.leddisk else None
+        self.disk_leds = DiskLeds() if settings.leddisk else None
+        self.array_faults = (None, set())
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
@@ -749,6 +926,8 @@ class Daemon:
             faults += self.check_fans([card.fan()], zone.pwm)
             cards.append((card, zone.pwm))
 
+        if self.disk_leds:
+            self.disk_leds.update(self.disk_errors(now))
         if self.settings.ledstatus:
             self.led.set("fault" if faults else "ok")
         status = build_status(self.hw, rows, self.chassis.pwm,
@@ -756,6 +935,15 @@ class Daemon:
                               cards)
         write_status(status)
         return status
+
+    def disk_errors(self, now):
+        """Disks to show red: failed S.M.A.R.T. or faulted in an array
+        (arrays checked at the disk polling interval)."""
+        last, faults = self.array_faults
+        if last is None or now - last >= self.settings.diskinterval:
+            self.array_faults = (now, array_faults())
+        return (self.disks.failed if self.disks else set()) | \
+            self.array_faults[1]
 
     def run(self):
         if not self.hw.present():
@@ -778,6 +966,8 @@ class Daemon:
         log.info("Started (mode=%s, interval=%ds, QM2 cards: %s)",
                  self.settings.fanmode, self.settings.interval,
                  ", ".join(c.name for c in self.hw.qm2_cards()) or "none")
+        if self.disk_leds:
+            self.disk_leds.start()
         while not self.stop.is_set():
             try:
                 self.step()
@@ -786,6 +976,8 @@ class Daemon:
                 failsafe(qm2=self.settings.use["qm2"])
             self.stop.wait(self.settings.interval)
         log.info("Stopping")
+        if self.disk_leds:
+            self.disk_leds.finish()
         return 0
 
 
@@ -814,6 +1006,12 @@ def failsafe(service_result=None, qm2=None):
                 card.set_pwm(PWM_MAX)
         except OSError as e:
             log.error("Failsafe could not set %s fan: %s", card.name, e)
+    for led in glob.glob(sysfs("class", "leds", DRIVER + "::hdd*")):
+        if "[timer]" in (read(os.path.join(led, "trigger")) or ""):
+            try:
+                write(os.path.join(led, "trigger"), "none")
+            except OSError:
+                pass
     if service_result not in (None, "", "success"):
         StatusLed().set("warning")
     return 0

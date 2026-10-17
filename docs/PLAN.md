@@ -456,7 +456,10 @@ user, not just the LED. Options, in order of preference:
 ### Phase 2 — QTS-like LEDs & health
 - [ ] mdstat **and ZFS** (`zpool status -x`; the reference box uses ZFS
       pools, no mdraid) → status LED (degraded/rebuild), volume-full check
-- [ ] Disk slot mapping + present/error/activity LEDs, Locate action in UI
+- [x] Disk slot mapping + present/error/activity LEDs (7.0.2; bay N = SATA
+      port N, verified on a TS-253D by lighting each LED and by reading
+      from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
+- [ ] Locate action in UI
 - [ ] QM2 slot LEDs (present / error / locate) from NVMe mapping + health
 - [ ] LED brightness night schedule
 - [ ] OMV notifications for faults

@@ -124,6 +124,10 @@
 			"type": "boolean",
 			"default": true
 		},
+		"leddisk": {
+			"type": "boolean",
+			"default": true
+		},
 		"ledbrightness": {
 			"type": "integer",
 			"minimum": 0,

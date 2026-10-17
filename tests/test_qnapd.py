@@ -375,6 +375,84 @@ class TestCollectd(FakeQm2):
         self.assertIsNone(qnapd.read_status(60))
 
 
+class TestDiskLeds(FakeSysfs):
+    def setUp(self):
+        super().setUp()
+        for port, dev in ((1, "sda"), (2, "sdb")):
+            disk = "devices/pci0000:00/0000:00:12.0/ata%d/host%d/target%d:0:0/" \
+                "%d:0:0:0/block/%s" % (port, port - 1, port - 1, port - 1, dev)
+            put(self.root, disk + "/stat", "10 0 0 0 5 0 0 0 0 0 0")
+            link(self.root, "block/" + dev, disk)
+        for n in (1, 2):
+            led = "class/leds/qnap8528::hdd%d" % n
+            put(self.root, led + "/brightness", "0")
+            put(self.root, led + "/trigger", "none")
+        # Bay 2 is empty after all: sdb is on port 3.
+        os.remove(os.path.join(self.root, "block/sdb"))
+        disk = "devices/pci0000:00/0000:00:12.0/ata3/host2/target2:0:0/" \
+            "2:0:0:0/block/sdb"
+        put(self.root, disk + "/stat", "1 0 0 0 1 0 0 0 0 0 0")
+        link(self.root, "block/sdb", disk)
+
+    def hdd(self, n, attr):
+        return get(self.root, "class/leds/qnap8528::hdd%d/%s" % (n, attr))
+
+    def test_bays_follow_sata_ports(self):
+        leds = qnapd.DiskLeds()
+        self.assertEqual([dev for _, dev in leds.slots], ["sda", None])
+
+    def test_present_activity_error(self):
+        leds = qnapd.DiskLeds()
+        leds.poll(now=0)
+        self.assertEqual((self.hdd(1, "brightness"), self.hdd(2, "brightness")),
+                         ("1", "0"))
+        put(self.root, "devices/pci0000:00/0000:00:12.0/ata1/host0/"
+            "target0:0:0/0:0:0:0/block/sda/stat", "11 0 0 0 5 0 0 0 0 0 0")
+        leds.poll(now=0.25)
+        self.assertEqual(self.hdd(1, "trigger"), "timer")
+        leds.poll(now=2)  # Idle for longer than the hold time.
+        self.assertEqual((self.hdd(1, "trigger"), self.hdd(1, "brightness")),
+                         ("none", "1"))
+        leds.update({"sda"})
+        leds.poll(now=3)
+        self.assertEqual(self.hdd(1, "brightness"), "2")
+
+    def test_failsafe_stops_blinking(self):
+        put(self.root, "class/leds/qnap8528::hdd1/trigger", "[timer]")
+        qnapd.failsafe("signal", qm2=False)
+        self.assertEqual(self.hdd(1, "trigger"), "none")
+
+
+class TestDiskHealth(unittest.TestCase):
+    ZPOOL = """  pool: backup-store
+ state: DEGRADED
+config:
+
+\tNAME           STATE     READ WRITE CKSUM
+\tbackup-store   DEGRADED     0     0     0
+\t  mirror-0     DEGRADED     0     0     0
+\t    /dev/sda1  FAULTED      3     0     0
+\t    /dev/sdb1  ONLINE       0     0     2
+\t    /dev/sdc1  ONLINE       0     0     0
+\t    /dev/nvme0n1p1  UNAVAIL  0     0     0
+"""
+
+    def test_zfs_faulted(self):
+        self.assertEqual(qnapd.zfs_faulted(self.ZPOOL),
+                         {"sda", "sdb", "nvme0n1"})
+
+    def test_md_faulty(self):
+        self.assertEqual(qnapd.md_faulty(
+            "md0 : active raid1 sdb1[1](F) sda1[0]\n"), {"sdb"})
+
+    def test_parse_smart(self):
+        self.assertEqual(qnapd.parse_smart(
+            {"temperature": {"current": 33}, "smart_status": {"passed": True}}),
+            (33.0, True))
+        # Standby: smartctl returns no data, health unknown.
+        self.assertEqual(qnapd.parse_smart({"power_mode": {}}), (None, None))
+
+
 class TestPackaging(unittest.TestCase):
     """omv-confdbadm migrate parses versions with packaging.version."""
 

@@ -36,6 +36,7 @@
 			"type": "object",
 			"properties": {
 				"ledstatus": { "type": "boolean", "required": true },
+				"leddisk": { "type": "boolean", "required": true },
 				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true }
 			}
 		}

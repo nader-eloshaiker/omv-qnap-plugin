@@ -1,3 +1,13 @@
+openmediavault-qnap (7.0.2) stable; urgency=low
+
+  * Disk LEDs: green when present, blinking on activity, red on a
+    S.M.A.R.T. failure or a faulted ZFS/md member; never wakes disks.
+  * History graphs, System page, Front panel / Power / Drivers tabs.
+  * CPU temperature smoothing, per-source hysteresis, fan floors.
+  * QM2 fans return to the card's controller on a clean stop.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 18:31:25 +1100
+
 openmediavault-qnap (7.0.1) stable; urgency=low
 
   * Use PEP 440 compatible version numbers: omv-confdbadm rejects
