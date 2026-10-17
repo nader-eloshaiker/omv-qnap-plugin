@@ -161,6 +161,10 @@ class TestDaemon(FakeSysfs):
         d = self.daemon(fanmode="manual", manualpwm=90)
         self.assertEqual(d.step(now=0)["pwm"], 90)
 
+    def test_manual_pwm_never_below_floor(self):
+        d = self.daemon(fanmode="manual", manualpwm=10)
+        self.assertEqual(d.step(now=0)["pwm"], qnapd.MIN_PWM_CHASSIS)
+
     def test_no_sensors_failsafe(self):
         d = self.daemon(usecpu=False, usesystem=False)
         status = d.step(now=0)
@@ -245,7 +249,8 @@ class FakeQm2(FakeSysfs):
 
 class TestQm2(FakeQm2):
     def daemon(self, **raw):
-        raw.update({"usedisk": False, "fanmode": "normal"})
+        raw.setdefault("fanmode", "normal")
+        raw["usedisk"] = False
         return qnapd.Daemon(qnapd.Settings(raw))
 
     def test_discovery(self):
@@ -270,6 +275,11 @@ class TestQm2(FakeQm2):
         self.assertIn("QM2 slot 1", labels)
         # The chassis zone still sees every NVMe SSD (70 >= 65).
         self.assertEqual(status["pwm"], 255)
+
+    def test_card_fan_never_below_its_floor(self):
+        status = self.daemon(fanmode="manual", manualpwm=50).step(now=0)
+        self.assertEqual(status["pwm"], 50)
+        self.assertEqual(status["qm2"], {"qm2.0": qnapd.MIN_PWM_QM2})
 
     def test_card_left_alone_when_disabled(self):
         status = self.daemon(useqm2=False).step(now=0)

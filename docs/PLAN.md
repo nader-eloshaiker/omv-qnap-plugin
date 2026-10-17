@@ -175,19 +175,36 @@ Every `interval` seconds:
 8. Status LED: green when healthy, red on any fault.
 9. Write `/run/qnapd/status.json` atomically.
 
-### 5.2 Presets (initial values, to be tuned on a TS-253D)
+### 5.2 Presets (tuned on a TS-253D, 2026-10-17)
 
 | Mode | CPU °C | System °C | Disk °C | NVMe °C | PWM range |
 |-|-|-|-|-|-|
-| Quiet | 50→85 | 35→50 | 40→50 | 50→70 | 40–200 |
+| Quiet | 50→85 | 35→50 | 40→50 | 50→70 | 48–200 |
 | Normal | 45→80 | 30→45 | 38→48 | 45→65 | 64–255 |
 | Performance | 40→70 | 28→40 | 35→45 | 40→60 | 100–255 |
 
 Notes: the TS-253D has a J4125 (Tjmax 105 °C) and one 70 mm fan, rated
 for 0–40 °C ambient. Disks are the thermally sensitive part of a NAS
 (manufacturers spec ≤ 55–60 °C), hence the low disk ranges.
-**Tuning task:** measure RPM vs PWM on a TS-253D (stall PWM, noise) and set
-`minpwm` per preset so the fan never stalls.
+Measured PWM → RPM (15 s per step, `fan-sweep`, OMV idle):
+
+| PWM | 255 | 192 | 128 | 96 | 80 | 64 | 56 | 48 | 40 | 32 | 16 | 8 |
+|-|-|-|-|-|-|-|-|-|-|-|-|-|
+| TS-253D chassis (70 mm) | 3631 | 2804 | 1905 | 1407 | 1191 | 944 | 786 | 663 | 546 | 397 | 342 | stall |
+| QM2-2P-244A-A1 | 5860 | 4740 | 3320 | 2440 | 1840 | 1260 | 880 | stall | 0 | 0 | 0 | 0 |
+
+- Chassis fan: stalls between 16 and 8, restarts from standstill only at
+  32. QM2 fan: stalls at 48, barely restarts at 48 (160 RPM); its PIC
+  default is 64.
+- Every zone has a floor in all modes (`MIN_PWM_CHASSIS` 40,
+  `MIN_PWM_QM2` 64), so a low Quiet/Custom/Manual value cannot stall a fan.
+- qnap8528 read-back drifts (128 → 127, 56 → 53); the daemon compares
+  against what it wrote, not the read-back.
+- Load note: an open OMV dashboard with many widgets kept two php-fpm
+  workers at ~80% of a core (tempmon re-runs every sensor script per
+  refresh), enough to spike J4125 core temps to 60 °C.
+- **Open:** noise at each PWM (needs a listener), and per-zone `minpwm` for
+  Custom mode if the floors turn out too conservative.
 
 ### 5.3 Failure handling
 
@@ -398,7 +415,8 @@ user, not just the LED. Options, in order of preference:
       *Diagnostics › Services* table; the module status shows in the
       dashboard *Services* widget. Fixed on the way: PEP 440 versions,
       postinst daemon-reload, start limit, ledtrig-timer, VPD NULs.
-- [ ] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
+- [x] Measure PWM→RPM curve and stall point; tune presets / `minpwm`
+      (chassis and QM2; noise check still open)
 - [ ] Verify `smartctl -n standby` does not wake disks (with hd-idle /
       OMV spindown enabled)
 - [ ] Verify failsafe: `kill -9 $(pidof -x qnapd)` → fan 255, LED red blink

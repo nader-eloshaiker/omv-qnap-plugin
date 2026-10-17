@@ -54,6 +54,12 @@ PWM_MAX_STEP_DOWN = 16
 # A fan reporting 0 RPM at or above this PWM for FAN_FAULT_CYCLES is failed.
 FAN_FAULT_MIN_PWM = 64
 FAN_FAULT_CYCLES = 3
+# Lowest PWM each kind of fan gets in any mode: the restart PWM from a
+# standstill plus a margin. Measured on a TS-253D (chassis fan stalls at
+# 8, restarts at 32) and a QM2-2P-244A-A1 (stalls at 48, barely restarts
+# at 48). See docs/PLAN.md section 5.2.
+MIN_PWM_CHASSIS = 40
+MIN_PWM_QM2 = 64
 # EC temperatures outside this range are treated as junk.
 PLAUSIBLE_TEMP = (5.0, 110.0)
 
@@ -64,7 +70,7 @@ SOURCES = ("cpu", "system", "disk", "nvme")
 PRESETS = {
     "quiet": {
         "cpu": (50, 85), "system": (35, 50), "disk": (40, 50),
-        "nvme": (50, 70), "pwm": (40, 200),
+        "nvme": (50, 70), "pwm": (48, 200),
     },
     "normal": {
         "cpu": (45, 80), "system": (30, 45), "disk": (38, 48),
@@ -586,8 +592,9 @@ def write_status(status):
 class Zone:
     """PWM state of a set of fans driven together (chassis or a QM2 card)."""
 
-    def __init__(self, name):
+    def __init__(self, name, floor):
         self.name = name
+        self.floor = floor
         self.pwm = None
         self.last_write = 0.0
 
@@ -600,7 +607,7 @@ class Daemon:
         self.disks = DiskTemps(settings.diskinterval) \
             if settings.use["disk"] else None
         self.led = StatusLed()
-        self.chassis = Zone("chassis")
+        self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
         self.zero_rpm = {}
         self.stop = threading.Event()
@@ -619,7 +626,12 @@ class Daemon:
         return faults
 
     def decide(self, zone, readings):
-        """Return (pwm, reason, faults) for one zone."""
+        """Return (pwm, reason, faults) for one zone, never below its
+        floor so the fan cannot stall."""
+        pwm, reason, faults = self._decide(zone, readings)
+        return max(pwm, zone.floor), reason, faults
+
+    def _decide(self, zone, readings):
         src = self.curve.critical(readings)
         if self.settings.fanmode == "manual":
             if src:
@@ -662,7 +674,8 @@ class Daemon:
                 # Leave the card fan to its PIC; just report it.
                 cards.append((card, card.read_pwm()))
                 continue
-            zone = self.cards.setdefault(card.name, Zone(card.name))
+            zone = self.cards.setdefault(card.name,
+                                         Zone(card.name, MIN_PWM_QM2))
             card_pwm, card_reason, card_faults = self.decide(
                 zone, {"qm2": temps})
             faults += ["%s: %s" % (card.name, f) for f in card_faults]
