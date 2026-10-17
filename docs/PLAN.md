@@ -467,7 +467,11 @@ user, not just the LED. Options, in order of preference:
       every 60 s; with qnapd's disk polling paused they were in standby
       within 16 min. A S.M.A.R.T. read restarts the standby timer. qnapd
       now queries a disk only after it has done I/O, or every 30 min.
-      (8.0.1; to verify on the box after deploying)
+      Verified after deploying (8.0.1): woken by smartd at 22:22, the disks
+      were in standby by 22:38 with qnapd polling every 60 s and stayed
+      asleep; the only qnapd query in that window was the 30-min refresh.
+      They slept 12–14 min after the wake, not the nominal 10 (drive
+      firmware, not qnapd).
 - [x] Verify failsafe: `kill -9` → chassis and QM2 fans 255, status LED red
       blink, systemd restart after ~11 s, LED green (2026-10-17). Found and
       fixed: the QM2 PIC ignores the first PWM write after a restart; the
