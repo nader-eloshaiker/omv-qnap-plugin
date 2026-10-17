@@ -10,6 +10,10 @@ openmediavault-qnap (8.0.2) stable; urgency=low
     LED state, and a Locate button that blinks the slot's LED red for 10
     minutes.
   * Storage health shows as a row on the Status page and dashboard widget.
+  * Bay activity blink only on models whose EC blinks bay LEDs in
+    hardware (TS-253D). Elsewhere the kernel blinked them in software
+    through the EC (e.g. TS-877), flooding the EC; bays there now show
+    present/error, and locate still blinks.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:41:55 +1100
 

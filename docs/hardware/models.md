@@ -8,7 +8,8 @@ not a whitelist. To add a model, follow
 
 **Status:** *verified* = every row checked on hardware by the maintainer;
 *reported* = a tester's model test report, part 2 included; *partial* =
-read-only report or some checks only.
+read-only report or some checks only; *planned* = researched from upstream
+sources, not run yet.
 
 | Model | QM2 card | Plugin | Status | Fans | LEDs | Buttons | Notes | Source |
 |-|-|-|-|-|-|-|-|-|
