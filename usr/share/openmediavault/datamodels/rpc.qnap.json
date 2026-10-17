@@ -38,7 +38,11 @@
 				"ledstatus": { "type": "boolean", "required": true },
 				"leddisk": { "type": "boolean", "required": true },
 				"ledbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true },
-				"volumefull": { "type": "integer", "minimum": 50, "maximum": 100, "required": true }
+				"volumefull": { "type": "integer", "minimum": 50, "maximum": 100, "required": true },
+				"lednight": { "type": "boolean", "required": true },
+				"lednightstart": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "required": true },
+				"lednightend": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "required": true },
+				"lednightbrightness": { "type": "integer", "minimum": 0, "maximum": 100, "required": true }
 			}
 		}
 	},

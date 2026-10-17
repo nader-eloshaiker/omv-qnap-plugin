@@ -680,6 +680,44 @@ class TestStorageHealth(FakeSysfs):
         self.assertEqual(qnapd.Settings({"volumefull": 20}).volumefull, 50)
 
 
+class TestNightBrightness(FakeSysfs):
+    def settings(self, **raw):
+        raw.setdefault("lednight", True)
+        return qnapd.Settings(dict(ledbrightness=80, lednightbrightness=5,
+                                   **raw))
+
+    def test_hhmm(self):
+        self.assertEqual(qnapd.hhmm("22:30", "00:00"), 22 * 60 + 30)
+        self.assertEqual(qnapd.hhmm("7:05", "00:00"), 7 * 60 + 5)
+        self.assertEqual(qnapd.hhmm("25:00", "07:00"), 7 * 60)
+        self.assertEqual(qnapd.hhmm(None, "07:00"), 7 * 60)
+
+    def test_window_across_midnight(self):
+        s = self.settings()  # 22:00-07:00 by default.
+        at = lambda h, m=0: qnapd.panel_brightness(s, h * 60 + m)
+        self.assertEqual([at(21, 59), at(22), at(3), at(6, 59), at(7), at(12)],
+                         [80, 5, 5, 5, 80, 80])
+
+    def test_window_within_a_day_and_off(self):
+        s = self.settings(lednightstart="01:00", lednightend="05:00")
+        self.assertEqual([qnapd.panel_brightness(s, m) for m in (0, 60, 299, 300)],
+                         [80, 5, 5, 80])
+        off = self.settings(lednight=False)
+        self.assertEqual(qnapd.panel_brightness(off, 23 * 60), 80)
+        same = self.settings(lednightstart="22:00", lednightend="22:00")
+        self.assertEqual(qnapd.panel_brightness(same, 23 * 60), 80)
+
+    def test_daemon_writes_brightness_on_change_only(self):
+        led = "class/leds/qnap8528::panel_brightness"
+        put(self.root, led + "/brightness", "100")
+        d = qnapd.Daemon(qnapd.Settings({"enable": True, "ledbrightness": 60}))
+        d.step(now=0)
+        self.assertEqual(get(self.root, led + "/brightness"), "60")
+        put(self.root, led + "/brightness", "33")  # Someone else wrote it.
+        d.step(now=10)
+        self.assertEqual(get(self.root, led + "/brightness"), "33")
+
+
 class TestPackaging(unittest.TestCase):
     """omv-confdbadm migrate parses versions with packaging.version."""
 

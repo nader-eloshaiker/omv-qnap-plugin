@@ -20,7 +20,7 @@ Defaults live only in `usr/share/openmediavault/datamodels/conf.service.qnap.jso
 | Page | Fields | RPC setter |
 |-|-|-|
 | Fan control | `enable`, `interval`, `fanmode`, `manualpwm`, `minpwm`, `maxpwm`, `hysteresis`, `use{cpu,system,disk,nvme,qm2}`, `{cpu,sys,disk,nvme}{low,high}`, `diskinterval` | `setFanSettings` |
-| Front panel | `ledstatus`, `leddisk`, `ledbrightness`, `volumefull` (8.0.2) | `setFrontPanelSettings` |
+| Front panel | `ledstatus`, `leddisk`, `ledbrightness`, `volumefull` (8.0.2), `lednight`, `lednightstart`, `lednightend`, `lednightbrightness` (8.0.3) | `setFrontPanelSettings` |
 | Power | `powerrecovery`, `eupmode`, `rebootefi` | `setPowerSettings` |
 | Drivers | `loadmodule`, `skiphwcheck`, `loadqm2` | `setDriverSettings` |
 

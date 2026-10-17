@@ -509,7 +509,8 @@ user, not just the LED. Options, in order of preference:
       only hardware writer, applies it in the LED loop. Runtime state, not
       config. Turns itself off after 10 minutes. (8.0.2; implemented
       2026-10-18, unit-tested, hardware checks pending)
-- [ ] LED brightness night schedule (8.0.3)
+- [ ] LED brightness night schedule (8.0.3; implemented 2026-10-18 on
+      branch feature/night-schedule, unit-tested, hardware check pending)
 - [ ] OMV notifications for faults: fan failure, critical temperature,
       disk/array fault, daemon failure; research how OMV 8 registers a
       plugin notification type (8.0.3)
