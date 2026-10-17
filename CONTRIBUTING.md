@@ -33,6 +33,18 @@ Changes that affect fans or LEDs are tested on the reference TS-253D
 before release. If you tested on your own hardware, say what you checked
 in the pull request.
 
+## Other QNAP models
+
+The plugin is only verified on a TS-253D, so reports from other models
+are the most useful contribution. Run `tools/model-test.py` on the NAS and
+open a **Model test report** issue; the protocol is in
+[docs/testing/model-testing.md](docs/testing/model-testing.md).
+
+A pull request that adds or fixes support for a model must include that
+report and fold what it found into the docs: `docs/hardware/<model>.md`
+and the row in [docs/hardware/models.md](docs/hardware/models.md). The
+pull request template lists the steps.
+
 ## Releases
 
 The maintainer adds the `debian/changelog` entry and pushes a `v<version>`

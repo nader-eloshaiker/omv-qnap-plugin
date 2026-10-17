@@ -1,0 +1,63 @@
+name: Model test report
+description: Report how the plugin behaves on a QNAP model other than the TS-253D.
+title: "Model test: "
+labels: [model-support]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. Reports from other models are how support gets
+        added, whether things work or not. Run `tools/model-test.py` on the
+        NAS first; the steps are in
+        [docs/testing/model-testing.md](https://github.com/nader-eloshaiker/omv-qnap-plugin/blob/main/docs/testing/model-testing.md).
+  - type: input
+    id: model
+    attributes:
+      label: NAS model
+      placeholder: TS-453D
+    validations:
+      required: true
+  - type: input
+    id: qm2
+    attributes:
+      label: QM2 card (if any)
+      placeholder: QM2-2P-244A
+  - type: input
+    id: disks
+    attributes:
+      label: Disks in each bay
+      description: Bay number as printed on the case, and what is in it.
+      placeholder: "1: 4 TB HDD, 2: empty, 3: 2 TB SSD, 4: 4 TB HDD"
+    validations:
+      required: true
+  - type: dropdown
+    id: parts
+    attributes:
+      label: What did you run?
+      options:
+        - Part 1 only (read-only report)
+        - Parts 1 and 2 (--interactive, at the box)
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Contents of qnap-model-report.md
+      description: Paste the whole file. If it is too long, attach it instead.
+    validations:
+      required: true
+  - type: textarea
+    id: observations
+    attributes:
+      label: What you saw and heard
+      description: >
+        Fan noise at idle, LEDs that look wrong, anything the script did
+        not ask about. If you know how QTS behaves on this model (fan
+        speeds, LED meanings), that helps too.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before posting
+      options:
+        - label: I read the report; it has no serial numbers, host names or IP addresses.
+          required: true

@@ -104,4 +104,5 @@ within seconds of boot, `ledtrig_timer` loaded, LEDs green, pools healthy.
 
 Record measured values with model, date and conditions in
 [../hardware/ts-253d.md](../hardware/ts-253d.md) (or a new file per model)
-and tick PLAN.md. No IPs, host names or serial numbers in the repo.
+and tick PLAN.md. Owners of other models use `tools/model-test.py`
+instead; see [model-testing.md](model-testing.md). No IPs, host names or serial numbers in the repo.

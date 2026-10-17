@@ -44,6 +44,7 @@ make deploy NAS=root@NAS_HOST  # install on a test NAS over SSH
 | Fan curve, presets, hysteresis, failsafe | `docs/hardware/fan-control.md`, `docs/hardware/ts-253d.md` | qnap-hardware | build-and-test |
 | Status / disk / QM2 LEDs | `docs/hardware/leds.md` | qnap-hardware | hardware-test |
 | Driver interfaces, new model support | `docs/reference/qnap8528.md`, `docs/dependencies.md` | qnap-hardware | — |
+| Model test reports, other QNAP models | `docs/testing/model-testing.md`, `docs/hardware/models.md` | qnap-hardware | — |
 | New setting or UI page, RPC, salt, graphs | `docs/omv-integration.md`, `docs/reference/omv-plugin-conventions.md` | omv-integration | add-setting |
 | Packaging, versions, migrations, postinst | `docs/build-and-release.md` | packaging | build-and-test |
 | Deploy to a NAS, test on hardware | `docs/testing/hardware-testing.md` | qnap-hardware | deploy-to-nas, hardware-test |

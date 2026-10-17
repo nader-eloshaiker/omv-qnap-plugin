@@ -13,6 +13,8 @@ the others where they meet.
 | [dependencies.md](dependencies.md) | installing drivers, adding a package or kernel-module dependency |
 | [build-and-release.md](build-and-release.md) | building the .deb, bumping the version, adding a confdb migration, editing postinst/postrm |
 | [testing/hardware-testing.md](testing/hardware-testing.md) | deploying to a NAS and verifying behaviour on real hardware |
+| [testing/model-testing.md](testing/model-testing.md) | collecting a test report from another QNAP model, or turning one into docs and a release |
+| [hardware/models.md](hardware/models.md) | checking which models have been tested and how |
 | [testing/ui-validation.md](testing/ui-validation.md) | checking the OMV web UI (Playwright MCP) |
 | [ai-context.md](ai-context.md) | setting up an AI coding assistant for this repo |
 | [PLAN.md](PLAN.md) | checking the roadmap, phase checklists, design decisions and open questions |
