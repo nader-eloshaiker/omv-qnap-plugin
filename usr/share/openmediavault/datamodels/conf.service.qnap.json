@@ -140,6 +140,26 @@
 			"maximum": 100,
 			"default": 95
 		},
+		"lednight": {
+			"type": "boolean",
+			"default": false
+		},
+		"lednightstart": {
+			"type": "string",
+			"pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+			"default": "22:00"
+		},
+		"lednightend": {
+			"type": "string",
+			"pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+			"default": "07:00"
+		},
+		"lednightbrightness": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 100,
+			"default": 10
+		},
 		"powerrecovery": {
 			"type": "string",
 			"enum": ["unchanged", "off", "on", "last"],

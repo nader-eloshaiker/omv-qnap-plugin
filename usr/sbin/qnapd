@@ -170,6 +170,27 @@ def to_int(value, default):
         return default
 
 
+HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+
+
+def hhmm(value, default):
+    """Minutes after midnight from "HH:MM" (default if malformed)."""
+    match = HHMM.match(str(value or "")) or HHMM.match(default)
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def panel_brightness(settings, minutes):
+    """Front panel brightness at a time of day (minutes after midnight):
+    the night value inside the night window, which may span midnight."""
+    start, end = settings.lednightstart, settings.lednightend
+    if settings.lednight and start != end:
+        night = start <= minutes < end if start < end else \
+            minutes >= start or minutes < end
+        if night:
+            return settings.lednightbrightness
+    return settings.ledbrightness
+
+
 class Settings:
     """Typed view of conf.service.qnap as rendered by salt."""
 
@@ -189,6 +210,11 @@ class Settings:
         self.ledbrightness = min(100, max(0, to_int(
             raw.get("ledbrightness"), 100)))
         self.volumefull = min(100, max(50, to_int(raw.get("volumefull"), 95)))
+        self.lednight = to_bool(raw.get("lednight", False))
+        self.lednightstart = hhmm(raw.get("lednightstart"), "22:00")
+        self.lednightend = hhmm(raw.get("lednightend"), "07:00")
+        self.lednightbrightness = min(100, max(0, to_int(
+            raw.get("lednightbrightness"), 10)))
         self.use = {src: to_bool(raw.get("use" + src, True))
                     for src in SOURCES}
         if self.fanmode in PRESETS:
@@ -1186,6 +1212,7 @@ class Daemon:
                          "hardware on %s", model or "this model")
         # (last check, faulted disks, LED state, reasons), every diskinterval.
         self.storage = (None, set(), "ok", [])
+        self.brightness = None  # Front panel brightness last written.
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
@@ -1291,6 +1318,12 @@ class Daemon:
         if self.disk_leds:
             self.disk_leds.update(errors)
         storage = self.storage[2:]
+        local = time.localtime()
+        brightness = panel_brightness(self.settings,
+                                      local.tm_hour * 60 + local.tm_min)
+        if brightness != self.brightness:
+            set_panel_brightness(brightness)
+            self.brightness = brightness
         if self.settings.ledstatus:
             self.led.set(status_led_state(faults, storage[0]))
         status = build_status(self.hw, rows, self.chassis.pwm,
@@ -1319,7 +1352,6 @@ class Daemon:
             signal.signal(sig, lambda *_: self.stop.set())
         if self.settings.ledstatus:
             self.led.set("starting")
-        set_panel_brightness(self.settings.ledbrightness)
         if not self.settings.use["qm2"]:
             # The user prefers the cards to manage their own fans.
             for card in self.hw.qm2_cards():

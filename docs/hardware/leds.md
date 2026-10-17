@@ -4,7 +4,8 @@ Code: `StatusLed`, `status_led_state()`, `storage_health()`, `DiskLeds`,
 `qm2_slot_disks()`, `set_panel_brightness()` in `usr/sbin/qnapd`. Tests:
 `TestDiskLeds`, `TestDiskHealth`, `TestStorageHealth`,
 `TestQm2.test_slot_leds_*`. Settings (Front panel tab): `ledstatus`,
-`leddisk`, `ledbrightness`, `volumefull`.
+`leddisk`, `ledbrightness`, `volumefull`, `lednight`, `lednightstart`,
+`lednightend`, `lednightbrightness`.
 
 ## Driver interfaces
 
@@ -72,6 +73,15 @@ the Status page and dashboard widget as a `Storage` row.
 - One thread owns all disk LEDs; clean stop leaves present/error colours,
   `failsafe` stops any blinking.
 
+## Panel brightness and night schedule
+
+`panel_brightness` (0–100) dims every front LED; QM2 card LEDs are not
+affected. With *Night brightness* on, the control loop uses
+`lednightbrightness` between `lednightstart` and `lednightend` (local
+time, `HH:MM`; the window may span midnight, equal times mean never) and
+`ledbrightness` otherwise. It writes only when the wanted value changes,
+so the switch happens within one `interval` of the boundary.
+
 ## Locate
 
 *System › QNAP › Disks* lists each bay and QM2 slot (device, model, size,
@@ -92,5 +102,5 @@ and confirm which LED blinks. Protocol:
 
 ## Not done yet
 
-USB LED for One Touch Copy (Phase 3), night brightness schedule, Btrfs
-device errors in the status LED.
+USB LED for One Touch Copy (Phase 3), Btrfs device errors in the status
+LED.

@@ -30,6 +30,56 @@ data:
           max: 100
           patternType: integer
           required: true
+      - type: checkbox
+        name: lednight
+        label: _("Night brightness")
+        value: false
+        hint: _("Use a different LED brightness at night, e.g. so the box does not light up a bedroom.")
+      - type: textInput
+        name: lednightstart
+        label: _("Night starts")
+        value: "22:00"
+        validators:
+          required: true
+          pattern:
+            pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+            errorData: _("Use 24-hour HH:MM, e.g. 22:30.")
+        modifiers:
+          - type: visible
+            constraint:
+              operator: truthy
+              arg0:
+                prop: lednight
+      - type: textInput
+        name: lednightend
+        label: _("Night ends")
+        value: "07:00"
+        validators:
+          required: true
+          pattern:
+            pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+            errorData: _("Use 24-hour HH:MM, e.g. 22:30.")
+        modifiers:
+          - type: visible
+            constraint:
+              operator: truthy
+              arg0:
+                prop: lednight
+      - type: numberInput
+        name: lednightbrightness
+        label: _("Night brightness (%)")
+        value: 10
+        validators:
+          min: 0
+          max: 100
+          patternType: integer
+          required: true
+        modifiers:
+          - type: visible
+            constraint:
+              operator: truthy
+              arg0:
+                prop: lednight
       - type: numberInput
         name: volumefull
         label: _("Volume full warning (%)")

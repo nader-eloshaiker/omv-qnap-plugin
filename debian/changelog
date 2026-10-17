@@ -1,3 +1,11 @@
+openmediavault-qnap (8.0.3) stable; urgency=low
+
+  * Night brightness: a lower front panel LED brightness between two
+    times of day (Front panel page; off by default), with a confdb
+    migration.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:44:37 +1100
+
 openmediavault-qnap (8.0.2) stable; urgency=low
 
   * Status LED follows storage health, QTS style: blinking red for a
