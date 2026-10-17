@@ -435,6 +435,10 @@ user, not just the LED. Options, in order of preference:
 - [x] `qnapd`: discovery, curve, presets, hysteresis, critical, failsafe
 - [x] Status LED (ok / fault / starting / service failed)
 - [x] Panel brightness, power recovery, EuP, module loading, `reboot=efi`
+- [x] `reboot=efi` from the plugin alone (2026-10-17): manual entry removed
+      from `/etc/default/grub`, drop-in written on Apply, reboot completed
+      in 54 s without hanging, `/proc/cmdline` has `reboot=efi` once, qnapd
+      in control 11 s into boot
 - [x] Install on a TS-253D (OMV 8.5 / Debian 13): verify every page, Save/Apply flow,
       dashboard widget, service status (2026-10-17). OMV 8 has no generic
       *Diagnostics › Services* table; the module status shows in the
