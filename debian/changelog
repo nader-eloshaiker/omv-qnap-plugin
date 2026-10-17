@@ -1,3 +1,18 @@
+openmediavault-qnap (8.0.2) stable; urgency=low
+
+  * Status LED follows storage health, QTS style: blinking red for a
+    degraded ZFS pool or md array, green/red alternating while a pool
+    resilvers or an array rebuilds, solid red for a failed pool or a
+    volume at least volumefull percent used. A scrub never changes it.
+  * New setting volumefull (Front panel page, default 95 percent), with a
+    confdb migration.
+  * System > QNAP > Disks: bays and QM2 slots with device, model, size and
+    LED state, and a Locate button that blinks the slot's LED red for 10
+    minutes.
+  * Storage health shows as a row on the Status page and dashboard widget.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:41:55 +1100
+
 openmediavault-qnap (8.0.1) stable; urgency=low
 
   * Let idle disks spin down: qnapd's S.M.A.R.T. reads restarted the
