@@ -412,6 +412,27 @@ class TestInfo(FakeSysfs):
     def test_leds_listed(self):
         self.assertEqual(self.info("")["leds"], ["status"])
 
+    def test_identity_cached_for_the_boot(self):
+        vpd = "devices/platform/qnap8528/vpd/"
+        put(self.root, vpd + "enclosure_serial", "Q000X000000")
+        put(self.root, vpd + "mainboard_date", "2021-08-13 08:49:00")
+        put(self.root, vpd + "mainboard_model", "70-0Q05H0201" + "\0" * 20)
+        put(self.root, "class/dmi/id/bios_version", "Q04WAR09\n")
+        put(self.root, "kmsg", "[ 7.6] qnap8528 @ qnap8528_find_config: "
+            "Model BP code match found, device model is TS-253D\n")
+        qnapd.IDENTITY_FILE = os.path.join(self.root, "identity.json")
+        qnapd.KERNEL_LOG_COMMANDS = (["cat", os.path.join(self.root,
+                                                          "kmsg")],)
+        info = self.info("")
+        self.assertEqual(info["model"], "TS-253D")
+        self.assertEqual(info["serial"], "Q000X000000")
+        self.assertEqual(info["manufactured"], "2021-08-13")
+        self.assertEqual(info["mainboard_model"], "70-0Q05H0201")
+        self.assertEqual(info["bios_version"], "Q04WAR09")
+        # Second call comes from the cache, not the (slow) VPD.
+        os.remove(os.path.join(self.root, vpd + "enclosure_serial"))
+        self.assertEqual(self.info("")["serial"], "Q000X000000")
+
 
 if __name__ == "__main__":
     unittest.main()

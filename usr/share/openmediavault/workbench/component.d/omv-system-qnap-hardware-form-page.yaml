@@ -19,16 +19,6 @@ data:
         readonly: true
         submitValue: false
       - type: textInput
-        name: boardmodel
-        label: _("Board codes (mainboard / backplane)")
-        readonly: true
-        submitValue: false
-      - type: textInput
-        name: ecfirmware
-        label: _("EC firmware")
-        readonly: true
-        submitValue: false
-      - type: textInput
         name: leds
         label: _("LEDs")
         readonly: true

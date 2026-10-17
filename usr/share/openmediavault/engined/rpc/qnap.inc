@@ -30,6 +30,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("getHardwareSettings");
 		$this->registerMethod("setHardwareSettings");
 		$this->registerMethod("getStatus");
+		$this->registerMethod("getDevice");
 	}
 
 	public function getSettings($params, $context)
@@ -66,9 +67,6 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$info = $this->qnapd(["info", "--json"]);
 		$result['driverstatus'] = !empty($info['hwmon']) ?
 			gettext("Loaded") : gettext("Not loaded");
-		$result['ecfirmware'] = $info['fw_version'] ?? "";
-		$result['boardmodel'] = trim(sprintf("%s %s",
-			$info['mainboard_model'] ?? "", $info['backplane_model'] ?? ""));
 		$result['leds'] = implode(", ", $info['leds'] ?? []);
 		$result['rebootefiactive'] = !empty($info['reboot_efi']) ?
 			gettext("Yes") : gettext("No");
@@ -101,6 +99,41 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
 		$status = $this->qnapd(["status", "--json"]);
 		return $status['rows'] ?? [];
+	}
+
+	/**
+	 * Device identity as {property, value} rows (System page, dashboard).
+	 */
+	public function getDevice($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$info = $this->qnapd(["info", "--json"]);
+		$rows = [];
+		if (!empty($info['bios_version']) && !empty($info['bios_date'])) {
+			$info['bios_version'] .= " ({$info['bios_date']})";
+		}
+		foreach ([
+				"model" => gettext("Model"),
+				"nickname" => gettext("Name"),
+				"serial" => gettext("Serial number"),
+				"bios_version" => gettext("BIOS"),
+				"fw_version" => gettext("EC firmware"),
+				"manufactured" => gettext("Manufactured"),
+				"mainboard_model" => gettext("Mainboard"),
+				"backplane_model" => gettext("Backplane"),
+			] as $key => $property) {
+			if (!empty($info[$key])) {
+				$rows[] = ["property" => $property, "value" => $info[$key]];
+			}
+		}
+		foreach ($info['qm2'] ?? [] as $card) {
+			$rows[] = [
+				"property" => gettext("QM2 card"),
+				"value" => sprintf("%s (S/N %s, PIC %s)", $card['model'] ?? "",
+					$card['serial'] ?? "?", $card['pic_version'] ?? "?")
+			];
+		}
+		return $rows;
 	}
 
 	private function setSubset($params)

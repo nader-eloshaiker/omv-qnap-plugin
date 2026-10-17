@@ -1,0 +1,23 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-system-datatable-page
+  type: datatablePage
+  config:
+    autoReload: false
+    hasSearchField: false
+    selectionType: none
+    limit: 0
+    stateId: 6d2f4a8e-1b7c-4e3a-9f05-8c4d2e6b7a19
+    store:
+      proxy:
+        service: Qnap
+        get:
+          method: getDevice
+    columns:
+      - name: _("Property")
+        prop: property
+        flexGrow: 1
+      - name: _("Value")
+        prop: value
+        flexGrow: 3

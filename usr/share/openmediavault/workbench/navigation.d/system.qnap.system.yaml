@@ -1,0 +1,8 @@
+version: "1.0"
+type: navigation-item
+data:
+  path: "system.qnap.system"
+  text: _("System")
+  position: 40
+  icon: "mdi:information-outline"
+  url: "/system/qnap/system"

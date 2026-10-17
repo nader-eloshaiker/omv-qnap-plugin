@@ -47,6 +47,13 @@ import time
 SYSFS = os.environ.get("QNAPD_SYSFS_ROOT", "/sys")
 CONFIG_FILE = os.environ.get("QNAPD_CONFIG", "/etc/qnapd/qnapd.json")
 STATUS_FILE = os.environ.get("QNAPD_STATUS", "/run/qnapd/status.json")
+# Device identity never changes but VPD reads through the EC are slow
+# (~5 ms per byte), so it is cached for the boot (/run is a tmpfs).
+IDENTITY_FILE = os.environ.get("QNAPD_IDENTITY", "/run/qnapd.identity.json")
+# qnap8528 logs the model it matched ("device model is TS-253D") but does
+# not export it in sysfs. dmesg first; the journal if the ring buffer wrapped.
+KERNEL_LOG_COMMANDS = (["dmesg"],
+                       ["journalctl", "-k", "-b", "--no-pager", "-o", "cat"])
 
 DRIVER = "qnap8528"
 PWM_MAX = 255
@@ -898,19 +905,60 @@ def cmd_status(args):
     return 0
 
 
+def detected_model():
+    """The model qnap8528 matched at load time, from the kernel log."""
+    for cmd in KERNEL_LOG_COMMANDS:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        found = re.findall(r"qnap8528.*device model is (\S+)", out)
+        if found:
+            return found[-1]
+    return None
+
+
+def identity():
+    """Model, serial number and board data, cached for the boot."""
+    try:
+        with open(IDENTITY_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        pass
+    vpd = sysfs("devices", "platform", DRIVER, "vpd")
+    ident = {
+        "model": detected_model(),
+        "serial": read(os.path.join(vpd, "enclosure_serial")),
+        "nickname": read(os.path.join(vpd, "enclosure_nickname")),
+        "mainboard_model": read(os.path.join(vpd, "mainboard_model")),
+        "backplane_model": read(os.path.join(vpd, "backplane_model")),
+        # "2021-08-13 08:49:00"
+        "manufactured": (read(os.path.join(vpd, "mainboard_date")) or
+                         "")[:10] or None,
+    }
+    if ident["serial"]:  # Only cache what the driver actually returned.
+        try:
+            with open(IDENTITY_FILE, "w") as f:
+                json.dump(ident, f)
+        except OSError:
+            pass
+    return ident
+
+
 def cmd_info(args):
     ec_dir = sysfs("devices", "platform", DRIVER)
-    info = {
+    dmi = sysfs("class", "dmi", "id")
+    info = identity()
+    info.update({
         "loaded": os.path.isdir(sysfs("module", DRIVER)),
         "hwmon": Hardware().present(),
         "fw_version": read(os.path.join(ec_dir, "ec", "fw_version")),
         "cpld_version": read(os.path.join(ec_dir, "ec", "cpld_version")),
         "power_recovery": read(os.path.join(ec_dir, "ec", "power_recovery")),
         "eup_mode": read(os.path.join(ec_dir, "ec", "eup_mode")),
-        "mainboard_model": read(os.path.join(ec_dir, "vpd",
-                                             "mainboard_model")),
-        "backplane_model": read(os.path.join(ec_dir, "vpd",
-                                             "backplane_model")),
+        "bios_version": read(os.path.join(dmi, "bios_version")),
+        "bios_date": read(os.path.join(dmi, "bios_date")),
         "reboot_efi": "reboot=efi" in (read(
             os.environ.get("QNAPD_CMDLINE", "/proc/cmdline")) or "").split(),
         "leds": sorted(os.path.basename(p)[len(DRIVER) + 2:] for p in
@@ -922,7 +970,7 @@ def cmd_info(args):
                  "pci": card.pci_path(),
                  "leds": [os.path.basename(p) for p in card.leds()]}
                 for card in Hardware.qm2_cards()],
-    }
+    })
     print(json.dumps(info) if args.json else
           "\n".join("%s: %s" % kv for kv in info.items()))
     return 0

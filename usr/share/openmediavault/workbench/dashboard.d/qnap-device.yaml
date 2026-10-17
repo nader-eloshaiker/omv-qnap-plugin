@@ -1,0 +1,23 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: 3f6b8d21-7c4a-4e9b-a5d0-2b8e1c7f9a64
+  type: datatable
+  title: _("QNAP device")
+  description: _("Displays the QNAP model, serial number and firmware versions.")
+  permissions:
+    role:
+      - admin
+  datatable:
+    columns:
+      - name: _("Property")
+        prop: property
+        flexGrow: 1
+      - name: _("Value")
+        prop: value
+        flexGrow: 2
+    store:
+      proxy:
+        service: Qnap
+        get:
+          method: getDevice
