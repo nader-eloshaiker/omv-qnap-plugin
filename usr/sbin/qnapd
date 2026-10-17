@@ -38,6 +38,7 @@ import logging
 import os
 import re
 import signal
+import socket
 import statistics
 import subprocess
 import sys
@@ -210,6 +211,8 @@ class Settings:
         self.ledbrightness = min(100, max(0, to_int(
             raw.get("ledbrightness"), 100)))
         self.volumefull = min(100, max(50, to_int(raw.get("volumefull"), 95)))
+        # Rendered by salt from OMV's notification settings, not a field.
+        self.notify = to_bool(raw.get("notify", False))
         self.lednight = to_bool(raw.get("lednight", False))
         self.lednightstart = hhmm(raw.get("lednightstart"), "22:00")
         self.lednightend = hhmm(raw.get("lednightend"), "07:00")
@@ -935,6 +938,64 @@ class DiskLeds:
                 pass
 
 
+def send_mail(subject, body):
+    """Mail root; OMV's postfix forwards it to the notification address."""
+    message = "To: root\nSubject: %s\n\n%s\n" % (subject, body)
+    try:
+        subprocess.run(["/usr/sbin/sendmail", "-t"], input=message, text=True,
+                       capture_output=True, timeout=30, check=True)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Cannot send notification: %s", e)
+
+
+class Notifier:
+    """Mails when hardware problems appear and when they clear, if OMV
+    notifications are on for "QNAP hardware". A problem must last
+    HOLD_SECONDS first, so a one-off glitch does not send mail."""
+
+    HOLD_SECONDS = 60
+
+    def __init__(self, enabled):
+        self.enabled = enabled
+        self.first_seen = {}
+        self.reported = set()
+
+    def update(self, problems, now):
+        problems = set(problems)
+        self.first_seen = {p: self.first_seen.get(p, now) for p in problems}
+        confirmed = {p for p, t in self.first_seen.items()
+                     if now - t >= self.HOLD_SECONDS}
+        new = confirmed - self.reported
+        cleared = self.reported - problems
+        self.reported = (self.reported | new) - cleared
+        if self.enabled and (new or cleared):
+            host = socket.gethostname()
+            if new:
+                subject = "QNAP hardware on %s: %s" % (host, sorted(new)[0])
+                if len(new) > 1:
+                    subject += " (+%d more)" % (len(new) - 1)
+            else:
+                subject = "QNAP hardware on %s: back to normal" % host
+            lines = ["New: " + p for p in sorted(new)] + \
+                ["Cleared: " + p for p in sorted(cleared)] + \
+                ["", "Current problems: %s" % (", ".join(sorted(
+                    self.reported)) or "none"),
+                 "Details: System > QNAP > Status, or `qnapd status`."]
+            send_mail(subject, "\n".join(lines))
+        return new, cleared
+
+
+def hardware_problems(faults, reason, errors, storage):
+    """Everything worth a notification, as stable short strings."""
+    problems = set(faults)
+    if reason and reason.startswith("critical"):
+        problems.add(reason)
+    problems.update("disk %s failed" % d for d in errors)
+    if storage[0] != "ok":
+        problems.update(storage[1])
+    return problems
+
+
 def status_led_state(faults, storage):
     """Fan/sensor faults and failed or full storage: solid red; a degraded
     pool or array: blinking red; a rebuild: green/red; otherwise green."""
@@ -1213,6 +1274,7 @@ class Daemon:
         # (last check, faulted disks, LED state, reasons), every diskinterval.
         self.storage = (None, set(), "ok", [])
         self.brightness = None  # Front panel brightness last written.
+        self.notifier = Notifier(settings.notify)
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
@@ -1326,6 +1388,8 @@ class Daemon:
             self.brightness = brightness
         if self.settings.ledstatus:
             self.led.set(status_led_state(faults, storage[0]))
+        self.notifier.update(hardware_problems(faults, reason, errors,
+                                               storage), now)
         status = build_status(self.hw, rows, self.chassis.pwm,
                               self.settings.fanmode, reason, faults, True,
                               cards, storage,
@@ -1412,6 +1476,12 @@ def failsafe(service_result=None, qm2=None):
                 pass
     if service_result not in (None, "", "success"):
         StatusLed().set("warning")
+        if load_settings_or_default().notify:
+            send_mail("QNAP hardware on %s: qnapd stopped unexpectedly"
+                      % socket.gethostname(),
+                      "qnapd exited (%s). The chassis fans are at full speed "
+                      "until systemd restarts it. See `journalctl -u qnapd`."
+                      % service_result)
     return 0
 
 

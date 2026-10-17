@@ -718,6 +718,60 @@ class TestNightBrightness(FakeSysfs):
         self.assertEqual(get(self.root, led + "/brightness"), "33")
 
 
+class TestNotifications(FakeSysfs):
+    def setUp(self):
+        super().setUp()
+        self.sent = []
+        patcher = unittest.mock.patch.object(
+            qnapd, "send_mail", lambda subject, body: self.sent.append(subject))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_hold_then_one_mail_then_cleared(self):
+        n = qnapd.Notifier(True)
+        n.update({"fan1 stalled"}, now=0)
+        n.update({"fan1 stalled"}, now=30)
+        self.assertEqual(self.sent, [])  # Not for a 30 s glitch.
+        n.update({"fan1 stalled"}, now=60)
+        n.update({"fan1 stalled"}, now=120)  # No repeat.
+        n.update(set(), now=130)
+        self.assertEqual(len(self.sent), 2)
+        self.assertIn("fan1 stalled", self.sent[0])
+        self.assertIn("back to normal", self.sent[1])
+
+    def test_glitch_that_clears_sends_nothing(self):
+        n = qnapd.Notifier(True)
+        n.update({"backup-store DEGRADED"}, now=0)
+        n.update(set(), now=30)
+        n.update(set(), now=200)
+        self.assertEqual(self.sent, [])
+
+    def test_disabled(self):
+        n = qnapd.Notifier(False)
+        self.assertEqual(n.update({"x"}, now=0), (set(), set()))
+        self.assertEqual(n.update({"x"}, now=60), ({"x"}, set()))
+        self.assertEqual(self.sent, [])
+
+    def test_problems(self):
+        self.assertEqual(qnapd.hardware_problems(
+            ["fan1 stalled"], "critical cpu temperature", {"sdb"},
+            ("degraded", ["backup-store DEGRADED"])),
+            {"fan1 stalled", "critical cpu temperature", "disk sdb failed",
+             "backup-store DEGRADED"})
+        self.assertEqual(qnapd.hardware_problems([], "curve", set(),
+                                                 ("ok", [])), set())
+
+    def test_failsafe_mails_on_crash_only(self):
+        self.addCleanup(setattr, qnapd, "CONFIG_FILE", qnapd.CONFIG_FILE)
+        qnapd.CONFIG_FILE = os.path.join(self.root, "qnapd.json")
+        put(self.root, "qnapd.json", json.dumps({"notify": True}))
+        qnapd.failsafe("success", qm2=False)
+        self.assertEqual(self.sent, [])
+        qnapd.failsafe("signal", qm2=False)
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("stopped unexpectedly", self.sent[0])
+
+
 class TestPackaging(unittest.TestCase):
     """omv-confdbadm migrate parses versions with packaging.version."""
 
