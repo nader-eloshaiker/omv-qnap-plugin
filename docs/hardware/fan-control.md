@@ -15,7 +15,12 @@ Code: `FanCurve`, `Zone`, `Daemon.decide/apply/step`, `failsafe()` in
   (`CPU_SMOOTH_SECONDS`) for the curve; the raw value for the critical check.
 - System: every qnap8528 `tempN_input` within 5–110 °C (junk filtered).
 - Disk: `smartctl -n standby -A -H -j` per non-removable `sdX`, every
-  `diskinterval` s (default 60); standby disks are skipped. USB disks
+  `diskinterval` s (default 60); standby disks are skipped. An awake disk
+  whose read/write counters have not moved since its last query keeps its
+  last reading and is re-queried only every 30 min
+  (`DiskTemps.IDLE_REFRESH_SECONDS`): a S.M.A.R.T. read restarts the
+  drive's standby timer, so polling idle disks every minute kept them from
+  ever spinning down (measured on the reference box, 2026-10-17). USB disks
   (sysfs path through a `usbN` controller) are left out: they sit outside
   the chassis airflow, so the fans cannot cool them. The reference box's
   USB boot SSD reports itself as non-removable, hence the path check.

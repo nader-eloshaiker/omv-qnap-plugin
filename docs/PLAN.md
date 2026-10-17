@@ -459,8 +459,15 @@ user, not just the LED. Options, in order of preference:
 - [x] Verify qnapd does not wake disks (2026-10-17): sda put in standby
       with `smartctl -s standby,now` stayed asleep through three disk polls
       (temperature skipped, bay LED green). It was then woken by OMV's own
-      smartd 30-min check (`-n never`), not by qnapd. Natural spindown on
-      the reference box is not configured (hdparm not installed).
+      smartd 30-min check (`-n never`), not by qnapd. (An earlier note
+      blamed a missing `hdparm`; OMV 8 does not use it, see
+      testing/hardware-testing.md.)
+- [x] Let idle disks spin down (2026-10-17): with OMV spindown at 10 min
+      and no I/O for 38 min the disks stayed awake while qnapd polled
+      every 60 s; with qnapd's disk polling paused they were in standby
+      within 16 min. A S.M.A.R.T. read restarts the standby timer. qnapd
+      now queries a disk only after it has done I/O, or every 30 min.
+      (8.0.1; to verify on the box after deploying)
 - [x] Verify failsafe: `kill -9` → chassis and QM2 fans 255, status LED red
       blink, systemd restart after ~11 s, LED green (2026-10-17). Found and
       fixed: the QM2 PIC ignores the first PWM write after a restart; the

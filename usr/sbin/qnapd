@@ -384,8 +384,14 @@ class DiskTemps:
     """SATA/SAS disk temperatures via smartctl, cached between polls.
 
     Disks in standby are skipped (smartctl -n standby) so that fan control
-    never spins up sleeping disks.
+    never spins up sleeping disks. Awake disks with no I/O since their last
+    query keep their last reading: on the reference TS-253D a S.M.A.R.T.
+    read restarts the drive's standby timer, so querying idle disks every
+    poll kept them from ever spinning down.
     """
+
+    # An idle, awake disk is still queried this often (health, slow drift).
+    IDLE_REFRESH_SECONDS = 1800
 
     def __init__(self, interval):
         self.interval = interval
@@ -394,11 +400,13 @@ class DiskTemps:
         # Disks whose last S.M.A.R.T. overall health check failed. Disks in
         # standby keep their previous verdict.
         self.failed = set()
+        self.queried = {}   # dev -> (time, I/O count) of the last query
+        self.readings = {}  # dev -> last (dev, label, temperature)
 
     def get(self, now):
         if self.last is None or now - self.last >= self.interval:
             self.last = now
-            self.cache = self.refresh()
+            self.cache = self.refresh(now)
         return self.cache
 
     @staticmethod
@@ -415,9 +423,18 @@ class DiskTemps:
             result.append(os.path.basename(path))
         return result
 
-    def refresh(self):
+    def refresh(self, now):
         result = []
         for dev in self.devices():
+            ios = io_count(dev)
+            when, last_ios = self.queried.get(dev, (None, None))
+            if ios is not None and ios == last_ios and \
+                    now - when < self.IDLE_REFRESH_SECONDS:
+                if dev in self.readings:
+                    result.append(self.readings[dev])
+                continue
+            self.queried[dev] = (now, ios)
+            self.readings.pop(dev, None)
             try:
                 proc = subprocess.run(
                     ["smartctl", "-n", "standby", "-A", "-H", "-j",
@@ -428,12 +445,20 @@ class DiskTemps:
                 continue
             temp, passed = parse_smart(data)
             if temp is not None:
-                result.append((dev, dev, temp))
+                self.readings[dev] = (dev, dev, temp)
+                result.append(self.readings[dev])
             if passed is False:
                 self.failed.add(dev)
             elif passed is True:
                 self.failed.discard(dev)
         return result
+
+
+def io_count(dev):
+    """Reads plus writes completed by a block device, or None. S.M.A.R.T.
+    queries do not count."""
+    stat = (read(sysfs("block", dev, "stat")) or "").split()
+    return int(stat[0]) + int(stat[4]) if len(stat) >= 5 else None
 
 
 def parse_smart(data):

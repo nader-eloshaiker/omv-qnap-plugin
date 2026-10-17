@@ -85,6 +85,13 @@ without waking it: `smartctl -n standby -i /dev/sdX` exits 2 in standby.
 Watch it across three `diskinterval`s: it must stay in standby, `qnapd
 status` must skip its temperature, its bay LED must stay solid green.
 
+Also check that idle disks *fall* asleep on their own: with OMV's
+spindown set, no I/O (`/sys/block/sdX/stat` counters flat) and no
+`smartctl` from anything else, the disk must be in standby one spindown
+time after its last I/O. Every `smartctl` call on an awake disk, including
+the `-n standby -i` check itself, restarts the timer: check once, at the
+end. qnapd before 8.0.1 failed this by querying idle disks every minute.
+
 If it wakes, find out why before blaming qnapd:
 - `/sys/block/sdX/stat` read/write counters: S.M.A.R.T. queries do not
   count as I/O, so moving counters mean a real read or write.
@@ -93,8 +100,11 @@ If it wakes, find out why before blaming qnapd:
   and wakes them. Set *Storage › S.M.A.R.T. › Settings › Power mode* to
   *Standby* for spindown to work.
 - `zpool iostat <pool> 10`: pool I/O.
-- OMV applies spindown/APM with `hdparm`; if it is not installed the disk
-  settings have no effect (seen on the reference box).
+- OMV 8 applies APM and spindown without `hdparm`: the
+  `smartctl-hdparm` service runs `/etc/smartmontools/hdparm.d/*`
+  (`smartctl --set=apm,N --set=standby,N`) at boot and on Apply. Check
+  `journalctl -u smartctl-hdparm -b` for `Standby timer set to …`. Exit
+  code 4 with "AAM disable failed" is harmless (the disk has no AAM).
 
 ### Power loss / boot
 After a reboot: `qnapd` active with `NRestarts=0`, journal shows control

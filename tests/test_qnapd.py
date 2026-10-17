@@ -13,6 +13,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 QNAPD = os.path.join(HERE, os.pardir, "usr", "sbin", "qnapd")
@@ -486,6 +487,37 @@ class TestDiskLeds(FakeSysfs):
         put(self.root, disk + "/removable", "0")
         link(self.root, "block/sdc", disk)
         self.assertEqual(qnapd.DiskTemps.devices(), ["sda", "sdb"])
+
+    def test_idle_disks_not_queried(self):
+        """A S.M.A.R.T. read restarts a drive's standby timer, so awake disks
+        without I/O keep their last reading until IDLE_REFRESH_SECONDS."""
+        queried = []
+
+        def smartctl(cmd, **kwargs):
+            queried.append(os.path.basename(cmd[-1]))
+            return unittest.mock.Mock(stdout=json.dumps(
+                {"temperature": {"current": 40}, "smart_status": {"passed": True}}))
+
+        disks = qnapd.DiskTemps(60)
+        with unittest.mock.patch.object(qnapd.subprocess, "run", smartctl):
+            self.assertEqual(disks.get(0), [("sda", "sda", 40.0), ("sdb", "sdb", 40.0)])
+            put(self.root, "devices/pci0000:00/0000:00:12.0/ata1/host0/"
+                "target0:0:0/0:0:0:0/block/sda/stat", "12 0 0 0 5 0 0 0 0 0 0")
+            self.assertEqual(disks.get(60), [("sda", "sda", 40.0), ("sdb", "sdb", 40.0)])
+            disks.get(120)  # No I/O since: nothing queried.
+            disks.get(60 + qnapd.DiskTemps.IDLE_REFRESH_SECONDS)
+        # sda again after its I/O, then both on the slow refresh.
+        self.assertEqual(queried, ["sda", "sdb", "sda", "sda", "sdb"])
+
+    def test_standby_disk_reading_dropped(self):
+        disks = qnapd.DiskTemps(60)
+        replies = iter([{"temperature": {"current": 40}}, {}])
+        with unittest.mock.patch.object(
+                qnapd.subprocess, "run", lambda cmd, **kw: unittest.mock.Mock(
+                    stdout=json.dumps(next(replies) if cmd[-1].endswith("sda") else {}))):
+            self.assertEqual(disks.get(0), [("sda", "sda", 40.0)])
+            # Idle past the refresh time and now in standby: no stale reading.
+            self.assertEqual(disks.get(qnapd.DiskTemps.IDLE_REFRESH_SECONDS), [])
 
     def test_failsafe_stops_blinking(self):
         put(self.root, "class/leds/qnap8528::hdd1/trigger", "[timer]")
