@@ -469,7 +469,8 @@ user, not just the LED. Options, in order of preference:
 - [x] Disk source: USB disks are left out (2026-10-17). They sit outside
       the chassis airflow, so the fans cannot cool them; the reference
       box's USB boot SSD reports itself non-removable, so qnapd checks the
-      sysfs path for a USB controller. No config field.
+      sysfs path for a USB controller. No config field. Verified on the
+      TS-253D: disk sources are `sda`, `sdb`; `sdc` (USB) is gone.
 - [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
       and stall point, failsafe, what `fan_default` does
 - [x] Target OMV 8 only, version 8.0.0 (OMV 7 dropped, 2026-10-17)
