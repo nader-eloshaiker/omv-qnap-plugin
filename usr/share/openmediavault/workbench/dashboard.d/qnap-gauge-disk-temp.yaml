@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: 9acf5dcd-88bb-4118-868b-53624e07e61a
+  permissions:
+    role:
+      - admin
+  title: _("QNAP disk temperature")
+  description: _("Hottest disk temperature (sleeping disks are not read).")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 70
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} °C"
+    dataConfig:
+      - label: _("Disk")
+        prop: disk
+        backgroundColor: "#4cd964"

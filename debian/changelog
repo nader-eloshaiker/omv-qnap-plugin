@@ -7,6 +7,8 @@ openmediavault-qnap (8.0.3) stable; urgency=low
     Notification. When enabled, qnapd mails when a fan, temperature, disk
     or pool problem lasts a minute, when it clears, and if the daemon
     stops unexpectedly.
+  * Dashboard gauges: round widgets for fan duty, QM2 fan duty and the
+    hottest CPU, system, disk and NVMe temperature (new RPC getGauges).
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:44:37 +1100
 

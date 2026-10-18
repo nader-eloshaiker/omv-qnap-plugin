@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: 2e2544f7-a7b3-415b-88d3-2919d81a6e87
+  permissions:
+    role:
+      - admin
+  title: _("QNAP NVMe temperature")
+  description: _("Hottest NVMe SSD temperature.")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 100
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} °C"
+    dataConfig:
+      - label: _("NVMe")
+        prop: nvme
+        backgroundColor: "#4cd964"

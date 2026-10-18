@@ -35,6 +35,7 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 | `getSettings` | admin | whole config (Fan control page) |
 | `getHardwareSettings` | admin | config + `driverstatus`, `leds`, `qm2cards`, `rebootefiactive` (Front panel, Power, Drivers pages) |
 | `getStatus` | admin | rows `{type, source, name, label, value, unit}` (Status page, fans & temperatures widget) |
+| `getGauges` | admin | `{fanduty, qm2duty, cpu, system, disk, nvme, qm2}`: duty % and hottest temperature per source, `null` if absent (gauge widgets) |
 | `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page, device widget) |
 | `getSlots` | admin | bays and QM2 slots `{id, label, device, model, size_gb, state, locate, locate_until}` from the status file (Disks page) |
 | `locate` | admin | `{id, enable}`: starts (10 min) or stops a locate request in `/run/qnapd/locate.json`; rejects ids qnapd does not report |
@@ -88,6 +89,7 @@ widget; OMV 8 has no generic Diagnostics › Services table).
 | `dashboard.d/qnap.yaml` | fans & temperatures grid |
 | `dashboard.d/qnap-device.yaml` | device datatable |
 | `dashboard.d/qnap-{temperature,fanspeed}-rrd.yaml` | history graphs (`type: rrd`, `kind` = image prefix) |
+| `dashboard.d/qnap-gauge-*.yaml` | round gauges (`type: chart`, `chart.type: gauge`, fixed min/max): fan duty, QM2 fan duty, CPU / system / disk / NVMe temperature, each from `getGauges` |
 | `*/diagnostics.performance-statistics.qnap.yaml`, `component.d/omv-diagnostics-performance-statistics-qnap-rrd-page.yaml` | Performance statistics › QNAP |
 
 UI gotchas seen on OMV 8.5:

@@ -445,6 +445,15 @@ class TestCollectd(FakeQm2):
         self.assertIn("percent-pwm", values)
         self.assertIn("percent-qm2_0_pwm", values)
 
+    def test_gauges_from_status(self):
+        d = qnapd.Daemon(qnapd.Settings({"usedisk": False}))
+        g = d.step(now=0)["gauges"]
+        self.assertEqual((g["cpu"], g["system"], g["nvme"], g["qm2"]),
+                         (50.0, 38.0, 70.0, 45.0))
+        self.assertIsNone(g["disk"])  # usedisk off: no disk rows
+        self.assertIsInstance(g["fanduty"], int)
+        self.assertIsInstance(g["qm2duty"], int)
+
     def test_stale_status_ignored(self):
         qnapd.write_status({"timestamp": 0, "rows": []})
         self.assertIsNone(qnapd.read_status(60))
