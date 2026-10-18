@@ -1,23 +1,63 @@
-# openmediavault-qnap
+# openmediavault-qnap: QNAP fan control, LEDs and buttons for OpenMediaVault
 
-An [OpenMediaVault](https://www.openmediavault.org/) plugin that brings
-QTS-style hardware control to QNAP NAS devices, using only the open source
-[qnap8528](https://github.com/0xGiddi/qnap8528) embedded controller driver.
-It does not use QNAP's proprietary binaries.
+**Leaving QNAP QTS? This free plugin makes your QNAP NAS hardware work
+properly in [OpenMediaVault](https://www.openmediavault.org/) (OMV).**
 
-Primary target is the **TS-253D**. Any model supported by qnap8528 should
-work, because all hardware is discovered at runtime.
+When you replace QTS with a normal Linux NAS system such as
+OpenMediaVault, the QNAP hardware doesn't know what to do. The fans
+often run at full speed and are loud, or never speed up at all. The
+status and disk lights stay off or show the wrong thing, and the front
+buttons do nothing.
 
-> **Status: feature complete (8.0.5).** Every feature below is verified on
-> the reference TS-253D with a QM2-2P-244A-A1 card (OMV 8.5). Other models
-> are untested: see [docs/hardware/models.md](docs/hardware/models.md) and
-> please send a [model test report](docs/testing/model-testing.md).
+This plugin fixes that from inside the OpenMediaVault web interface, with
+no command line needed:
+
+- ✅ **Quiet, automatic fan control** like QTS Smart Fan (Quiet, Normal,
+  Performance or your own curve), based on CPU, system, hard disk and
+  NVMe temperatures.
+- ✅ **Working LEDs**: status light, disk bay lights, locate a disk, front
+  panel brightness.
+- ✅ **Buttons and beeps**: USB Copy and Reset buttons, QTS-style beeps.
+- ✅ **Temperature graphs, dashboard gauges and email alerts.**
+- ✅ **QM2 expansion cards** (M.2 NVMe) with their own fan and slot lights.
+
+It is free and open source (GPL), built on the open source
+[qnap8528](https://github.com/0xGiddi/qnap8528) and
+[qnap-qm2](https://github.com/0xGiddi/qnap-qm2) drivers. It never uses
+QNAP's own software. If anything goes wrong, the fans go to full speed so
+your NAS stays cool.
+
+> **Status: feature complete (8.0.6).** Every feature below is verified on
+> the reference **TS-253D** with a QM2-2P-244A-A1 card (OMV 8.5). The
+> qnap8528 driver supports many more QNAP models (TS-x51, TS-x53, TS-x64,
+> TS-x73A, TVS and others), so they should work, but they have not been
+> tested with this plugin yet: see [docs/hardware/models.md](docs/hardware/models.md)
+> and please send a [model test report](docs/testing/model-testing.md).
+
+## Quick start
+
+Already running OpenMediaVault 8 on your QNAP?
+
+1. Download **one file**, `openmediavault-qnap_<version>_all.deb`, from the
+   [latest release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases/latest).
+2. In the OMV web interface open **System › Plugins**, click **Upload**,
+   choose the file, then select the plugin and click **Install**.
+3. Open **System › QNAP › Drivers** and click **Set up drivers**. This
+   installs the drivers and everything they need, and turns on fan
+   control.
+4. Open **System › QNAP › Status** to watch the fans and temperatures.
+
+Still on QTS? Read **[Moving from QNAP QTS to OpenMediaVault](docs/guide/qts-to-omv.md)**:
+a step-by-step guide to backing up, installing OMV on your QNAP and
+setting up this plugin.
+
+Project website: <https://nader-eloshaiker.github.io/omv-qnap-plugin/>
 
 ## Features
 
 **Fan control**
 - QTS-style Smart Fan: Quiet, Normal and Performance presets, a Custom
-  curve (ramp-up and full-speed temperature per source, PWM range,
+  curve (ramp-up and full-speed temperature per source, fan speed range,
   hysteresis) and Manual.
 - Temperature sources: CPU (coretemp / k10temp), the embedded controller's
   system sensors, hard disks (S.M.A.R.T., sleeping disks are never woken)
@@ -103,27 +143,44 @@ blurred.
 
 ## Install
 
-Download the .debs from the latest
-[release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases):
-the plugin and the [qnap8528](https://github.com/0xGiddi/qnap8528) driver,
-plus the [qnap-qm2](https://github.com/0xGiddi/qnap-qm2) driver for QM2
-cards. The driver packages are built from upstream releases and replace a
-hand-made `dkms install` of the same driver.
+The [Quick start](#quick-start) above is all most people need:
+
+1. Download `openmediavault-qnap_<version>_all.deb` from the
+   [latest release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases/latest).
+2. **System › Plugins › Upload**, choose the file, then **Install**.
+3. **System › QNAP › Drivers › Set up drivers**: installs the
+   [qnap8528](https://github.com/0xGiddi/qnap8528) and
+   [qnap-qm2](https://github.com/0xGiddi/qnap-qm2) driver packages and the
+   kernel headers DKMS needs, and turns on fan control.
+
+Then, under **System › QNAP**:
+
+- **Fan control**: pick a mode (Quiet, Normal, Performance, Custom or
+  Manual), then Save and Apply.
+- **Status**: watch the fan speed and temperatures live.
+- **Front panel** / **Power**: status LED and brightness; power recovery,
+  EuP mode and `reboot=efi`.
+- **System**: model, serial number and firmware versions.
+
+New to OpenMediaVault? See
+[Moving from QNAP QTS to OpenMediaVault](docs/guide/qts-to-omv.md).
+
+### Advanced: command line
+
+The release also has the driver packages, built from upstream releases.
+They replace a hand-made `dkms install` of the same driver. To install
+all three over SSH instead:
 
 ```sh
 apt install ./qnap8528-dkms_<version>_all.deb ./qm2mod-dkms_<version>_all.deb \
             ./openmediavault-qnap_<version>_all.deb
 ```
 
-Then go to **System › QNAP**:
+Then check **System › QNAP › Drivers** shows the driver as *Loaded*, tick
+*Load the qnap8528 module at boot* (and *qm2mod* for QM2 cards), and
+enable fan control on the **Fan control** page.
 
-1. **Drivers**: confirm the driver shows as *Loaded*. Optionally tick
-   *Load the qnap8528 module at boot* (and *qm2mod* for QM2 cards).
-2. **Fan control**: tick *Enable*, pick a mode, then Save and Apply.
-3. **Status**: watch the fan speed and temperatures live.
-4. **Front panel** / **Power**: status LED and brightness; power recovery,
-   EuP mode and `reboot=efi`.
-5. **System**: model, serial number and firmware versions.
+### Fail safe
 
 When the service stops or crashes, the chassis fans go to **full speed**:
 qnap8528 has no way to hand the fan back to the EC's automatic mode. QM2 card

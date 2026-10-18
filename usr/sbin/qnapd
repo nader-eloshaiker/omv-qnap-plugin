@@ -60,6 +60,8 @@ MOUNTS_FILE = "/proc/mounts"
 INPUT_DIR = os.environ.get("QNAPD_INPUT_DIR", "/dev/input/by-path")
 UPTIME_FILE = "/proc/uptime"
 MODULES_DIR = os.environ.get("QNAPD_MODULES_DIR", "/lib/modules")
+DRIVERS_DIR = os.environ.get("QNAPD_DRIVERS_DIR",
+                             "/usr/share/openmediavault-qnap/drivers")
 # qnap8528 logs the model it matched ("device model is TS-253D") but does
 # not export it in sysfs. dmesg first; the journal if the ring buffer wrapped.
 KERNEL_LOG_COMMANDS = (["dmesg"],
@@ -1901,6 +1903,21 @@ def header_packages(release):
     return ["linux-headers-" + release, "linux-headers-" + flavour]
 
 
+def driver_packages():
+    """The driver packages shipped with the plugin, and the installed
+    version of each (None when not installed)."""
+    result = []
+    for path in sorted(glob.glob(os.path.join(DRIVERS_DIR,
+                                              "*-dkms_*_all.deb"))):
+        package, version = os.path.basename(path).split("_")[:2]
+        status = command_output(["dpkg-query", "-W", "-f",
+                                 "${db:Status-Abbrev}${Version}", package])
+        result.append({"package": package, "path": path, "bundled": version,
+                       "installed": status[3:].strip()
+                       if status.startswith("ii") else None})
+    return result
+
+
 def cmd_info(args):
     ec_dir = sysfs("devices", "platform", DRIVER)
     dmi = sysfs("class", "dmi", "id")
@@ -1923,6 +1940,7 @@ def cmd_info(args):
         "headers": os.path.isdir(os.path.join(MODULES_DIR, os.uname().release,
                                               "build")),
         "header_packages": header_packages(os.uname().release),
+        "driver_packages": driver_packages(),
         "qm2": [{"name": card.name, "model": card.attr("model"),
                  "serial": card.attr("serial"),
                  "pic_version": card.attr("pic_version"),

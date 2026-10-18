@@ -3,7 +3,7 @@ Section: admin
 XB-Plugin-Section: utilities
 Priority: optional
 Maintainer: Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13), dh-dkms, git, ca-certificates, python3
 Standards-Version: 4.7.2
 Homepage: https://github.com/nader-eloshaiker/omv-qnap-plugin
 Vcs-Git: https://github.com/nader-eloshaiker/omv-qnap-plugin.git

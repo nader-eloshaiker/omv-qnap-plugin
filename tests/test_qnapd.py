@@ -992,6 +992,19 @@ class TestInfo(FakeSysfs):
     def test_leds_listed(self):
         self.assertEqual(self.info("")["leds"], ["status"])
 
+    def test_bundled_driver_packages(self):
+        self.addCleanup(setattr, qnapd, "DRIVERS_DIR", qnapd.DRIVERS_DIR)
+        qnapd.DRIVERS_DIR = os.path.join(self.root, "drivers")
+        put(self.root, "drivers/qnap8528-dkms_1.27-1_all.deb", "")
+        installed = {"qnap8528-dkms": "ii 1.24-1"}
+        with unittest.mock.patch.object(
+                qnapd, "command_output",
+                lambda cmd: installed.get(cmd[-1], "")):
+            packages = self.info("")["driver_packages"]
+        self.assertEqual([(p["package"], p["bundled"], p["installed"])
+                          for p in packages],
+                         [("qnap8528-dkms", "1.27-1", "1.24-1")])
+
     def test_headers_for_the_running_kernel(self):
         self.addCleanup(setattr, qnapd, "MODULES_DIR", qnapd.MODULES_DIR)
         qnapd.MODULES_DIR = os.path.join(self.root, "modules")

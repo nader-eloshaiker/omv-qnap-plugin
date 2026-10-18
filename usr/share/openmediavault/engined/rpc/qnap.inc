@@ -29,6 +29,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	public function initialize()
 	{
 		$this->registerMethod("getSettings");
+		$this->registerMethod("getFanSettings");
 		$this->registerMethod("setFanSettings");
 		$this->registerMethod("getHardwareSettings");
 		$this->registerMethod("setFrontPanelSettings");
@@ -36,7 +37,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setDriverSettings");
 		$this->registerMethod("setButtonSettings");
 		$this->registerMethod("getTasks");
-		$this->registerMethod("installHeaders");
+		$this->registerMethod("setupDrivers");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
 		$this->registerMethod("getGauges");
@@ -51,6 +52,20 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		return $db->getAssoc("conf.service.qnap");
 	}
 
+	/**
+	 * Fan control page: the settings with fan speeds as percent.
+	 */
+	public function getFanSettings($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$db = \OMV\Config\Database::getInstance();
+		$result = $db->getAssoc("conf.service.qnap");
+		foreach (["manual", "min", "max"] as $key) {
+			$result["{$key}speed"] = (int)round($result["{$key}pwm"] * 100 / 255);
+		}
+		return $result;
+	}
+
 	public function setFanSettings($params, $context)
 	{
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
@@ -63,9 +78,14 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 					$title));
 			}
 		}
-		if ($params['minpwm'] > $params['maxpwm']) {
+		if ($params['minspeed'] > $params['maxspeed']) {
 			throw new \OMV\Exception(gettext(
 				"The minimum fan speed must not be greater than the maximum fan speed."));
+		}
+		// The page shows percent; the config (and qnapd) use PWM 0-255.
+		foreach (["manual", "min", "max"] as $key) {
+			$params["{$key}pwm"] = (int)round($params["{$key}speed"] * 255 / 100);
+			unset($params["{$key}speed"]);
 		}
 		return $this->setSubset($params);
 	}
@@ -76,25 +96,38 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$db = \OMV\Config\Database::getInstance();
 		$result = $db->getAssoc("conf.service.qnap");
 		$info = $this->qnapd(["info", "--json"]);
-		$result['driverstatus'] = !empty($info['hwmon']) ?
-			gettext("Loaded") : gettext("Not loaded");
+		$packages = $info['driver_packages'] ?? [];
+		$installed = array_filter(array_column($packages, 'installed'));
+		$outdated = array_filter($packages, function($p) {
+			return !empty($p['installed']) && $p['installed'] !== $p['bundled'];
+		});
+		$missing = count($packages) > count($installed);
+		if (!empty($info['hwmon']) && $missing) {
+			$result['driverstatus'] = gettext(
+				"Running, but not installed properly: click Set up drivers.");
+		} else if (!empty($info['hwmon'])) {
+			$result['driverstatus'] = empty($outdated) ?
+				gettext("Ready ✓") :
+				gettext("Ready. A driver update is available: click Set up drivers.");
+		} else if (!empty($installed)) {
+			$result['driverstatus'] = gettext(
+				"Installed but not running: click Set up drivers, or restart the NAS.");
+		} else {
+			$result['driverstatus'] = gettext(
+				"Not set up yet: click Set up drivers below.");
+		}
 		$result['leds'] = implode(", ", $info['leds'] ?? []);
 		$result['rebootefiactive'] = !empty($info['reboot_efi']) ?
 			gettext("Yes") : gettext("No");
 		$result['headersstatus'] = !empty($info['headers']) ?
-			sprintf(gettext("Installed for %s"), $info['kernel'] ?? "") :
-			sprintf(gettext("Missing for %s: the drivers cannot be rebuilt for this kernel"),
-				$info['kernel'] ?? "?");
+			gettext("Ready ✓") :
+			gettext("Missing: click Set up drivers.");
 		$cards = array_map(function($card) {
 			return sprintf("%s (%s, PIC %s)", $card['model'] ?? "",
 				$card['name'] ?? "", $card['pic_version'] ?? "?");
 		}, $info['qm2'] ?? []);
-		if (!empty($cards)) {
-			$result['qm2cards'] = implode(", ", $cards);
-		} else {
-			$result['qm2cards'] = !empty($info['qm2_loaded']) ?
-				gettext("None found") : gettext("qm2mod driver not loaded");
-		}
+		$result['qm2cards'] = !empty($cards) ? implode(", ", $cards) :
+			gettext("None found");
 		return $result;
 	}
 
@@ -149,34 +182,94 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	}
 
 	/**
-	 * Install the kernel headers DKMS needs to build the drivers: for the
-	 * running kernel and, via its metapackage, for future kernels.
+	 * One-click driver setup (Drivers page): install the kernel headers and
+	 * the driver packages shipped with the plugin, (re)load the drivers,
+	 * load them at boot and turn fan control on.
 	 */
-	public function installHeaders($params, $context)
+	public function setupDrivers($params, $context)
 	{
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
 		\OMV\System\Apt::assertNotLocked();
-		$packages = $this->qnapd(["info", "--json"])['header_packages'] ?? [];
-		foreach ($packages as $package) {
+		$info = $this->qnapd(["info", "--json"]);
+		$headers = $info['header_packages'] ?? [];
+		$debs = array_column($info['driver_packages'] ?? [], 'path');
+		foreach ($headers as $package) {
 			if (!preg_match('/^[a-z0-9][a-z0-9.+-]+$/', $package)) {
 				throw new \OMV\Exception(sprintf(gettext(
 					"Unexpected package name '%s'."), $package));
 			}
 		}
-		if (empty($packages)) {
+		foreach ($debs as $path) {
+			if (!preg_match('#^/usr/share/openmediavault-qnap/drivers/[a-z0-9-]+_[A-Za-z0-9.+~-]+_all\.deb$#', $path)) {
+				throw new \OMV\Exception(sprintf(gettext(
+					"Unexpected driver package '%s'."), $path));
+			}
+		}
+		if (empty($debs)) {
 			throw new \OMV\Exception(gettext(
-				"Cannot tell which kernel headers to install."));
+				"The driver packages are missing. Reinstall the openmediavault-qnap plugin."));
 		}
 		return $this->execBgProc(function($bgStatusFilename, $bgOutputFilename)
-				use ($packages) {
-			$cmd = new \OMV\System\Process("apt-get", array_merge(
-				["--yes", "--no-install-recommends", "install"], $packages));
-			$cmd->setRedirect2to1();
-			$cmd->setEnv("DEBIAN_FRONTEND", "noninteractive");
-			if (0 !== ($exitStatus = $this->exec($cmd, $output,
-					$bgOutputFilename))) {
+				use ($headers, $debs, $context) {
+			$say = function($text) use ($bgOutputFilename) {
+				file_put_contents($bgOutputFilename, "\n" . $text . "\n",
+					FILE_APPEND);
+			};
+			$run = function(array $args) {
+				$cmd = new \OMV\System\Process($args);
+				$cmd->setQuiet(TRUE);
+				try {
+					$cmd->execute($output, $exitStatus);
+				} catch (\Exception $e) {
+					return FALSE;
+				}
+				return 0 === $exitStatus;
+			};
+			$apt = function(array $packages) use ($bgOutputFilename) {
+				$cmd = new \OMV\System\Process("apt-get", array_merge(
+					["--yes", "--no-install-recommends", "install"], $packages));
+				$cmd->setRedirect2to1();
+				$cmd->setEnv("DEBIAN_FRONTEND", "noninteractive");
+				return [$cmd, $this->exec($cmd, $output, $bgOutputFilename),
+					$output];
+			};
+			$say(gettext("Step 1 of 4: installing the files needed to build the drivers (kernel headers) ..."));
+			if (!empty($headers) && 0 !== $apt($headers)[1]) {
+				$say(gettext("The kernel headers could not be installed; continuing, but the drivers may not build."));
+			}
+			$say(gettext("Step 2 of 4: installing and building the drivers. This can take a few minutes ..."));
+			list($cmd, $exitStatus, $output) = $apt($debs);
+			if (0 !== $exitStatus) {
 				throw new \OMV\ExecException($cmd, $output, $exitStatus);
 			}
+			$say(gettext("Step 3 of 4: starting the drivers (the fans run at full speed for a moment) ..."));
+			$run(["systemctl", "stop", "qnapd"]);
+			$run(["modprobe", "-r", "qm2mod"]);
+			$run(["modprobe", "-r", "qnap8528"]);
+			$skip = FALSE;
+			if (!$run(["modprobe", "qnap8528"])) {
+				// Models with an ENE embedded controller fail the chip check.
+				$skip = $run(["modprobe", "qnap8528", "skip_hw_check=true"]);
+			}
+			$run(["modprobe", "qm2mod"]);
+			$info = $this->qnapd(["info", "--json"]);
+			if (empty($info['hwmon'])) {
+				throw new \OMV\Exception(gettext(
+					"The drivers are installed, but the hardware driver did not start on this model. Restart the NAS and open this page again. If it still says it is not running, please report your model on GitHub."));
+			}
+			$say(gettext("Step 4 of 4: loading the drivers at every start and turning on fan control ..."));
+			$db = \OMV\Config\Database::getInstance();
+			$object = $db->get("conf.service.qnap");
+			$object->set("loadmodule", TRUE);
+			$object->set("loadqm2", !empty($info['qm2']));
+			if ($skip) {
+				$object->set("skiphwcheck", TRUE);
+			}
+			$object->set("enable", TRUE);
+			$db->set($object);
+			\OMV\Rpc\Rpc::call("Config", "applyChanges",
+				["modules" => [], "force" => FALSE], $context);
+			$say(gettext("Done. Your QNAP's fans, lights and buttons are now managed by OpenMediaVault. You can close this window."));
 			return $output;
 		});
 	}
@@ -203,7 +296,82 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	{
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
 		$status = $this->qnapd(["status", "--json"]);
-		return $status['rows'] ?? [];
+		return $this->friendlyRows($status['rows'] ?? [],
+			$status['slots'] ?? []);
+	}
+
+	/**
+	 * Plain names for the Status page and dashboard grid: "Processor"
+	 * instead of "Package id 0", "Bay 1" instead of "sda", and so on.
+	 */
+	private function friendlyRows(array $rows, array $slots)
+	{
+		$kinds = ["fan" => gettext("Fan"), "pwm" => gettext("Fan power"),
+			"temperature" => gettext("Temperature"),
+			"storage" => gettext("Storage")];
+		$bySlotDevice = [];
+		foreach ($slots as $slot) {
+			if (!empty($slot['device'])) {
+				$bySlotDevice[$slot['device']] = $slot;
+			}
+		}
+		$system = count(array_filter($rows, function($r) {
+			return ($r['source'] ?? "") === "system";
+		}));
+		$n = 0;
+		foreach ($rows as &$row) {
+			$row['kind'] = $kinds[$row['type']] ?? $row['type'];
+			$name = $row['name'] ?? "";
+			switch ($row['source'] ?? "") {
+			case "cpu":
+				$row['label'] = gettext("Processor");
+				break;
+			case "system":
+				$n++;
+				$row['label'] = $system > 1 ? sprintf(gettext("Inside the case %d"),
+					$n) : gettext("Inside the case");
+				break;
+			case "disk":
+				$row['label'] = isset($bySlotDevice[$name]) ?
+					sprintf(gettext("%s drive"), $bySlotDevice[$name]['label']) :
+					sprintf(gettext("Drive %s"), $name);
+				break;
+			case "nvme":
+				$label = sprintf(gettext("NVMe SSD %s"), substr($name, 4));
+				foreach ($bySlotDevice as $device => $slot) {
+					if (strpos($device, $name . "n") === 0) {
+						$label = sprintf(gettext("%s SSD"),
+							str_replace("qm2.0 ", "QM2 ", $slot['label']));
+					}
+				}
+				$row['label'] = $label;
+				break;
+			case "qm2":
+				if ($row['type'] === "temperature") {
+					$row['label'] .= " " . gettext("(card sensor)");
+				} else {
+					$row['label'] = $row['type'] === "fan" ?
+						gettext("QM2 card fan") : gettext("QM2 card fan power");
+				}
+				break;
+			case "fan":
+				if ($row['type'] === "fan") {
+					$row['label'] = sprintf(gettext("Fan %s"),
+						preg_replace('/\D/', "", $name));
+				} else if ($name === "pwm") {
+					$row['label'] = gettext("Fan power");
+				} else {
+					$row['label'] = gettext("QM2 card fan power");
+				}
+				break;
+			case "storage":
+				if ($row['value'] === "ok") {
+					$row['value'] = gettext("All good");
+				}
+				break;
+			}
+		}
+		return $rows;
 	}
 
 	/**
@@ -259,7 +427,16 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	{
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
 		$status = $this->qnapd(["status", "--json"]);
-		return $status['slots'] ?? [];
+		$states = ["off" => gettext("Off (empty)"), "on" => gettext("Green"),
+			"active" => gettext("Green, busy"), "error" => gettext("Red (fault)"),
+			"locate" => gettext("Blinking red (locating)")];
+		$slots = $status['slots'] ?? [];
+		foreach ($slots as &$slot) {
+			$slot['statetext'] = $states[$slot['state']] ?? $slot['state'];
+			$slot['label'] = preg_replace('/^qm2\.(\d+) slot/', 'QM2 slot',
+				$slot['label']);
+		}
+		return $slots;
 	}
 
 	/**

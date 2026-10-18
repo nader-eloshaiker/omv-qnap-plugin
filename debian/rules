@@ -7,6 +7,21 @@
 override_dh_installsystemd:
 	dh_installsystemd --name=qnapd --no-enable --no-start
 
+# The driver packages ship inside the plugin, so "Set up drivers" on the
+# Drivers page can install them without a download.
+DRIVERS = usr/share/openmediavault-qnap/drivers
+
+override_dh_auto_build:
+	drivers/build.sh debian/drivers-build
+
+override_dh_install:
+	dh_install
+	mkdir -p debian/openmediavault-qnap/$(DRIVERS)
+	cp debian/drivers-build/*-dkms_*_all.deb debian/openmediavault-qnap/$(DRIVERS)/
+
+override_dh_auto_clean:
+	rm -rf debian/drivers-build
+
 # The top-level Makefile is a developer helper only; keep debhelper's
 # build system away from it.
-override_dh_auto_clean override_dh_auto_build override_dh_auto_test override_dh_auto_install:
+override_dh_auto_test override_dh_auto_install:

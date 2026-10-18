@@ -24,7 +24,10 @@ statistics, for the graphs).
 
 `drivers/build.sh` (`make drivers` / `make docker-drivers`, and CI on
 every build) packages each driver from the upstream commit pinned in
-`drivers/<name>/source` with `dh-dkms`; the release attaches the .debs.
+`drivers/<name>/source` with `dh-dkms`; the release attaches the .debs,
+and since 8.0.6 the plugin build (`debian/rules`) also ships them in
+`/usr/share/openmediavault-qnap/drivers/` for the Drivers page's *Set up
+drivers* button, so users install one file.
 DKMS builds the module on the NAS, so it needs headers for the
 **running** kernel and for each kernel update: the Drivers page shows
 whether they are there and *Install kernel headers* installs

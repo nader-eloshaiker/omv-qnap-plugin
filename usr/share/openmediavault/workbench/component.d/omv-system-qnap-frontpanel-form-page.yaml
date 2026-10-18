@@ -13,17 +13,17 @@ data:
     fields:
       - type: checkbox
         name: ledstatus
-        label: _("Drive the status LED")
+        label: _("Use the Status light")
         value: true
-        hint: _("Green when healthy. Solid red on a fan or sensor fault, a failed pool or a full volume; blinking red if a pool or RAID array is degraded or the service fails; green and red alternating while a pool resilvers or an array rebuilds. A scrub does not change it.")
+        hint: _("Works like QTS. Green means all is well. Red means a fan or sensor problem, a failed disk group or a volume that is nearly full. Blinking red means a disk group is running on fewer disks than it should (degraded). Green and red in turn means a disk group is being rebuilt.")
       - type: checkbox
         name: leddisk
-        label: _("Drive the disk LEDs")
+        label: _("Use the disk lights")
         value: true
-        hint: _("Drive bays and QM2 card M.2 slots. Green when a disk is present, blinking on disk activity, red on a S.M.A.R.T. failure or when a ZFS pool or RAID array has faulted the disk. Sleeping disks are not woken.")
+        hint: _("One light per drive bay and per QM2 card slot. Green when a disk is in the slot, flickering while it is busy, red when the disk reports a fault or has failed out of its disk group.")
       - type: numberInput
         name: ledbrightness
-        label: _("LED brightness (%)")
+        label: _("Light brightness (%)")
         value: 100
         validators:
           min: 0
@@ -32,18 +32,18 @@ data:
           required: true
       - type: checkbox
         name: lednight
-        label: _("Night brightness")
+        label: _("Dim the lights at night")
         value: false
-        hint: _("Use a different LED brightness at night, e.g. so the box does not light up a bedroom.")
+        hint: _("Handy if the NAS is in a bedroom or living room.")
       - type: textInput
         name: lednightstart
-        label: _("Night starts")
+        label: _("Night starts at")
         value: "22:00"
         validators:
           required: true
           pattern:
             pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-            errorData: _("Use 24-hour HH:MM, e.g. 22:30.")
+            errorData: _("Use 24-hour time, for example 22:30.")
         modifiers:
           - type: visible
             constraint:
@@ -52,13 +52,13 @@ data:
                 prop: lednight
       - type: textInput
         name: lednightend
-        label: _("Night ends")
+        label: _("Night ends at")
         value: "07:00"
         validators:
           required: true
           pattern:
             pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
-            errorData: _("Use 24-hour HH:MM, e.g. 22:30.")
+            errorData: _("Use 24-hour time, for example 07:00.")
         modifiers:
           - type: visible
             constraint:
@@ -67,7 +67,7 @@ data:
                 prop: lednight
       - type: numberInput
         name: lednightbrightness
-        label: _("Night brightness (%)")
+        label: _("Brightness at night (%)")
         value: 10
         validators:
           min: 0
@@ -82,19 +82,13 @@ data:
                 prop: lednight
       - type: numberInput
         name: volumefull
-        label: _("Volume full warning (%)")
+        label: _("Turn the Status light red when a volume is this full (%)")
         value: 95
-        hint: _("The status LED turns red when a ZFS pool or a mounted filesystem is at least this full.")
         validators:
           min: 50
           max: 100
           patternType: integer
           required: true
-      - type: textInput
-        name: leds
-        label: _("Available LEDs")
-        readonly: true
-        submitValue: false
     buttons:
       - template: submit
       - template: cancel
