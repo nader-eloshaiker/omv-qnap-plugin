@@ -33,9 +33,9 @@ work, because all hardware is discovered at runtime.
 
 - OpenMediaVault 8 (Debian 13), tested on a TS-253D. OMV 7 is not
   supported (it would need a separate 7.x release line).
-- Headers for the running kernel, so DKMS can build the drivers:
-  `linux-headers-amd64` on the Debian kernel, `proxmox-default-headers`
-  on the Proxmox kernel.
+- Headers for the running kernel, so DKMS can build the drivers. The
+  plugin's Drivers page shows whether they are installed and installs them
+  with one click (also for future kernel updates).
 
 ## Install
 

@@ -20,7 +20,7 @@ data:
         name: loadmodule
         label: _("Load the qnap8528 module at boot")
         value: false
-        hint: _("The driver must already be installed (e.g. via DKMS).")
+        hint: _("Needs the qnap8528-dkms package from the plugin's release page.")
       - type: checkbox
         name: skiphwcheck
         label: _("Skip the chip ID check (skip_hw_check)")
@@ -41,10 +41,26 @@ data:
         name: loadqm2
         label: _("Load the qm2mod module at boot")
         value: false
-        hint: _("For QM2 cards, using the qnap-qm2 driver (https://github.com/0xGiddi/qnap-qm2), which must already be installed.")
+        hint: _("For QM2 cards. Needs the qm2mod-dkms package from the plugin's release page.")
+      - type: textInput
+        name: headersstatus
+        label: _("Kernel headers")
+        readonly: true
+        submitValue: false
+        hint: _("DKMS builds the drivers for each kernel and needs its headers. Install kernel headers adds them for the running kernel and, through its metapackage, for future kernel updates.")
     buttons:
       - template: submit
       - template: cancel
         execute:
           type: url
           url: "/system/qnap"
+      - text: _("Install kernel headers")
+        execute:
+          type: taskDialog
+          taskDialog:
+            config:
+              title: _("Installing kernel headers ...")
+              startOnInit: true
+              request:
+                service: Qnap
+                method: installHeaders

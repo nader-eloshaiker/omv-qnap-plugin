@@ -914,6 +914,20 @@ class TestBeeps(FakeSysfs):
         self.assertEqual(d.beeper.beeps, ["storage", "storage"])
 
 
+class TestHeaders(unittest.TestCase):
+    def test_proxmox_kernel(self):
+        self.assertEqual(qnapd.header_packages("7.0.14-24-pve"),
+                         ["proxmox-headers-7.0.14-24-pve",
+                          "proxmox-headers-7.0"])
+
+    def test_debian_kernels(self):
+        self.assertEqual(qnapd.header_packages("6.12.48+deb13-amd64"),
+                         ["linux-headers-6.12.48+deb13-amd64",
+                          "linux-headers-amd64"])
+        self.assertEqual(qnapd.header_packages("6.1.0-18-cloud-amd64")[1],
+                         "linux-headers-cloud-amd64")
+
+
 class TestPackaging(unittest.TestCase):
     """omv-confdbadm migrate parses versions with packaging.version."""
 
@@ -977,6 +991,17 @@ class TestInfo(FakeSysfs):
 
     def test_leds_listed(self):
         self.assertEqual(self.info("")["leds"], ["status"])
+
+    def test_headers_for_the_running_kernel(self):
+        self.addCleanup(setattr, qnapd, "MODULES_DIR", qnapd.MODULES_DIR)
+        qnapd.MODULES_DIR = os.path.join(self.root, "modules")
+        self.assertFalse(self.info("")["headers"])
+        os.makedirs(os.path.join(qnapd.MODULES_DIR, os.uname().release,
+                                 "build"))
+        info = self.info("")
+        self.assertTrue(info["headers"])
+        self.assertEqual(info["kernel"], os.uname().release)
+        self.assertEqual(len(info["header_packages"]), 2)
 
     def test_identity_cached_for_the_boot(self):
         vpd = "devices/platform/qnap8528/vpd/"

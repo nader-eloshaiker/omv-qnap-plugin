@@ -59,6 +59,7 @@ LOCATE_FILE = os.environ.get("QNAPD_LOCATE", "/run/qnapd/locate.json")
 MOUNTS_FILE = "/proc/mounts"
 INPUT_DIR = os.environ.get("QNAPD_INPUT_DIR", "/dev/input/by-path")
 UPTIME_FILE = "/proc/uptime"
+MODULES_DIR = os.environ.get("QNAPD_MODULES_DIR", "/lib/modules")
 # qnap8528 logs the model it matched ("device model is TS-253D") but does
 # not export it in sysfs. dmesg first; the journal if the ring buffer wrapped.
 KERNEL_LOG_COMMANDS = (["dmesg"],
@@ -1888,6 +1889,18 @@ def identity():
     return ident
 
 
+def header_packages(release):
+    """Headers for this kernel plus the metapackage that brings them for
+    future kernels of the same line, so DKMS can rebuild the drivers."""
+    pve = re.match(r"^(\d+)\.(\d+)\.\S*-pve$", release)
+    if pve:
+        return ["proxmox-headers-" + release,
+                "proxmox-headers-%s.%s" % pve.groups()]
+    # Debian: 6.12.48+deb13-amd64 / 6.1.0-18-cloud-amd64 -> amd64 / cloud-amd64
+    flavour = re.sub(r"^\d+-", "", release.split("-", 1)[-1])
+    return ["linux-headers-" + release, "linux-headers-" + flavour]
+
+
 def cmd_info(args):
     ec_dir = sysfs("devices", "platform", DRIVER)
     dmi = sysfs("class", "dmi", "id")
@@ -1906,6 +1919,10 @@ def cmd_info(args):
         "leds": sorted(os.path.basename(p)[len(DRIVER) + 2:] for p in
                        glob.glob(sysfs("class", "leds", DRIVER + "::*"))),
         "qm2_loaded": os.path.isdir(sysfs("module", "qm2mod")),
+        "kernel": os.uname().release,
+        "headers": os.path.isdir(os.path.join(MODULES_DIR, os.uname().release,
+                                              "build")),
+        "header_packages": header_packages(os.uname().release),
         "qm2": [{"name": card.name, "model": card.attr("model"),
                  "serial": card.attr("serial"),
                  "pic_version": card.attr("pic_version"),
