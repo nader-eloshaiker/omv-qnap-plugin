@@ -15,7 +15,7 @@ data:
         name: beep
         label: _("Beep on events")
         value: false
-        hint: _("QTS patterns through the buzzer. One short beep at startup, at shutdown and when Reset is pressed; three long beeps every 5 minutes while a fan has stopped; two long beeps when a pool becomes degraded, failed or full or starts rebuilding; three short beeps when USB Copy fails.")
+        hint: _("QTS patterns through the buzzer. One short beep when qnapd starts at boot (OMV adds its own when ready and when shutting down) and when Reset is pressed; three long beeps every 5 minutes while a fan has stopped; two long beeps when a pool becomes degraded, failed or full or starts rebuilding; three short beeps when USB Copy fails.")
       - type: select
         name: usbcopytask
         label: _("USB Copy button runs")

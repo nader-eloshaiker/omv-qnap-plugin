@@ -342,8 +342,10 @@ qnap8528's `examples/qnap-set-status.sh`.
   `HandlePowerKey=` in `/etc/systemd/logind.conf` instead of reimplementing.
 - **Beeper** (8.0.4, `beep`, off by default): QTS patterns, see
   [reference/qts-behaviour.md](reference/qts-behaviour.md); startup only
-  when the system booted < 5 min ago and shutdown only while systemd is
-  stopping, so an Apply's restart stays silent. QTS uses beeps for start/shutdown/fan failure.
+  when the system booted < 5 min ago, so an Apply's restart stays silent.
+  No shutdown beep: OMV already beeps going down and when ready (seen on
+  the TS-253D, 2026-10-18), so the boot sequence is qnapd's beep, then
+  OMV's.
   qnap8528 exposes no buzzer, but the buzzer is the PC-speaker line:
   `EV_SND`/`SND_TONE` on the `pcspkr` input device beeps on the TS-253D
   (2026-10-18, [hardware/ts-253d.md](hardware/ts-253d.md)). No EC access.
@@ -552,9 +554,9 @@ user, not just the LED. Options, in order of preference:
 - [x] Reset button actions (safe defaults) (8.0.4; verified: a 1 s press
       does nothing, a 4 s hold beeps once and runs the task)
 - [x] Beeper investigation: `pcspkr` input device (TS-253D, 2026-10-18)
-- [ ] Chassis-open event; beeps for start, shutdown, fan failure (8.0.4;
-      implemented and unit-tested; boot/shutdown beeps need a reboot to
-      check, chassis open needs the lid off)
+- [x] Boot beep (8.0.4; heard on the TS-253D, 2026-10-18, before OMV's)
+- [ ] Chassis-open event; fan-failure beeps (8.0.4; unit-tested; chassis
+      open needs the lid off, the fan alarm a stalled fan)
 
 ### Phase 4 — Driver integration
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits

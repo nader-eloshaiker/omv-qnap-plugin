@@ -4,10 +4,10 @@ openmediavault-qnap (8.0.4) stable; urgency=low
     chosen OMV Scheduled Task, blinking the USB LED while it runs; Reset
     held 3 seconds runs another (longer holds do nothing). Chassis open is
     logged and mailed.
-  * Beeps (off by default): QTS patterns through the PC speaker at startup
-    and shutdown, every 5 minutes while a fan has stopped, when a pool
-    becomes degraded, failed or full or starts rebuilding, and when USB
-    Copy fails.
+  * Beeps (off by default): QTS patterns through the PC speaker when
+    qnapd starts at boot (OMV beeps on shutdown itself), every 5 minutes
+    while a fan has stopped, when a pool becomes degraded, failed or full
+    or starts rebuilding, and when USB Copy fails.
   * confdb migration for beep, usbcopytask and resettask.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sun, 18 Oct 2026 12:58:59 +1100
