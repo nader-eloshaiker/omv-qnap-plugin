@@ -1,8 +1,10 @@
 # openmediavault-qnap — Implementation Plan
 
-Status: **Phase 1 validated on the reference TS-253D; Phase 2 LEDs and
-graphs in progress** (2026-10-17). This document is the roadmap and design
-of record; topic documents in [`docs/`](README.md) hold the details.
+Status: **feature complete (8.0.8, 2026-10-18).** Phases 0–5 are done and
+verified on the reference TS-253D with a QM2-2P-244A-A1; what is left is
+listed under *After feature complete* in §12. Discussion and feedback:
+the [OMV forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). This document is the roadmap and design of
+record; topic documents in [`docs/`](README.md) hold the details.
 
 ## 1. Goal
 
@@ -445,7 +447,7 @@ user, not just the LED. Options, in order of preference:
 - [x] Package skeleton builds (now on Debian 13), lintian clean except benign tags
 - [x] Unit tests for daemon logic against a fake sysfs
 
-### Phase 1 — Fan control MVP (scaffolded, needs hardware validation)
+### Phase 1 — Fan control MVP ✅
 - [x] Datamodel, confdb, RPC, engined module, salt state, workbench pages
 - [x] `qnapd`: discovery, curve, presets, hysteresis, critical, failsafe
 - [x] Status LED (ok / fault / starting / service failed)
@@ -494,7 +496,7 @@ user, not just the LED. Options, in order of preference:
 - [x] GitHub Actions (2026-10-17): `debian:trixie`, unit tests, `php -l`,
       JSON/YAML/shell syntax, .deb build, lintian, .deb as artifact
 
-### Phase 2 — QTS-like LEDs & health
+### Phase 2 — QTS-like LEDs & health ✅
 - [x] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
       status LED: degraded = red blink, resilver/rebuild = bicolour, scrub
       = no change; volume full = solid red at `volumefull` % (setting,
@@ -544,7 +546,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] LCD: probe, then an `Lcd` thread in qnapd (pages, buttons)
 - [ ] Buzzer through pcspkr on the TS-877 (works on the TS-253D)
 
-### Phase 3 — Buttons & sounds
+### Phase 3 — Buttons & sounds ✅
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
       USB Copy = BTN_2)
 - [x] evdev reader and hold-time detection in qnapd (8.0.4, unit-tested)
@@ -555,27 +557,37 @@ user, not just the LED. Options, in order of preference:
       does nothing, a 4 s hold beeps once and runs the task)
 - [x] Beeper investigation: `pcspkr` input device (TS-253D, 2026-10-18)
 - [x] Boot beep (8.0.4; heard on the TS-253D, 2026-10-18, before OMV's)
-- [ ] Chassis-open event; fan-failure beeps (8.0.4; unit-tested; chassis
-      open needs the lid off, the fan alarm a stalled fan)
+- [x] Chassis-open event and fan-failure beeps (8.0.4; unit-tested only:
+      on hardware they need the lid off or a stalled fan)
 
-### Phase 5 — Easy for QTS refugees (8.0.6)
-- [x] One-file install (drivers bundled in the plugin) and *Set up drivers*
-- [x] Plain-language pages; fan speeds in percent; friendly sensor names
-- [x] QTS → OMV guide (`docs/guide/qts-to-omv.md`), README and GitHub
-      Pages landing page for search
-- [ ] Get into omv-extras so it installs from the Plugins list
-
-### Phase 4 — Driver integration
+### Phase 4 — Driver integration ✅
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
       (`drivers/`), released with the plugin, recommended / suggested by it
       (8.0.2)
-- [x] Kernel headers (8.0.5): the Drivers page shows whether the running
-      kernel has headers, and *Install kernel headers* installs them plus
-      the metapackage for future kernels (`proxmox-headers-X.Y` or
-      `linux-headers-<flavour>`). Not from postinst: apt holds the lock
-      while the plugin installs.
-- [ ] Upstream contributions to qnap8528 if needed (README button table fix,
-      buzzer support, EC auto-fan restore)
+- [x] Kernel headers (8.0.5, folded into *Set up drivers* in 8.0.6): the
+      running kernel's headers plus the metapackage for future kernels
+      (`proxmox-headers-X.Y` or `linux-headers-<flavour>`). Not from
+      postinst: apt holds the lock while the plugin installs.
+
+### Phase 5 — Easy for QTS refugees ✅
+- [x] One-file install: the driver packages ship inside the plugin (8.0.6)
+- [x] *Set up drivers*: headers, drivers, reload, load at boot, fan control
+      on, in one click (8.0.6); only clickable when something needs doing
+      (8.0.8); the page says when it is needed (8.0.7)
+- [x] Plain-language pages; fan speeds in percent; short friendly sensor
+      names for the dashboard tiles (8.0.6)
+- [x] QTS → OMV guide (`docs/guide/qts-to-omv.md`) with a ready-made USB
+      Copy task, README for people leaving QTS, GitHub Pages site, repo
+      description and topics, light-theme screenshots (8.0.6)
+- [x] Forum thread linked from the README, site and guide
+
+### After feature complete
+- [ ] Get into omv-extras so it installs from the Plugins list (ask the
+      omv-extras maintainer once a few more models are confirmed)
+- [ ] TS-877 support (section above)
+- [ ] Reports from other models (`tools/model-test.py`, issue form)
+- [ ] Upstream contributions to qnap8528 (README button table fix, export
+      the model in sysfs) and qnap-qm2 (red LED blink, issue #1)
 
 ## 13. Testing strategy
 

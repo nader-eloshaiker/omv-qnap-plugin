@@ -40,6 +40,7 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 | `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page, device widget) |
 | `getSlots` | admin | bays and QM2 slots `{id, label, device, model, size_gb, state, locate, locate_until}` from the status file (Disks page) |
 | `locate` | admin | `{id, enable}`: starts (10 min) or stops a locate request in `/run/qnapd/locate.json`; rejects ids qnapd does not report |
+| `getHardwareSettings` | admin | config plus read-only page values: `driverstatus`, `headersstatus`, `qm2cards`, `needssetup` (drivers missing / not running / outdated or no headers; drives the *Set up drivers* button's `enabledConstraint`), `leds`, `rebootefiactive` |
 | `setupDrivers` | admin | background job (Drivers page task dialog): `apt-get install` the `header_packages` (best effort) and the bundled `driver_packages` from `/usr/share/openmediavault-qnap/drivers`, stop qnapd, reload the modules (retry `skip_hw_check=true`), set `loadmodule`, `loadqm2` (cards found), `skiphwcheck` (if the retry worked) and `enable`, then `Config.applyChanges` |
 | `getFanSettings` | admin | the config plus `manualspeed`, `minspeed`, `maxspeed` in percent (Fan control page); `setFanSettings` takes percent and stores PWM 0-255 |
 | `getTasks` | admin | `[{uuid, description}]`: "None" plus OMV's user-defined Scheduled Tasks (Buttons page) |

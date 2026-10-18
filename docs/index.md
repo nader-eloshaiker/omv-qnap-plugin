@@ -113,5 +113,7 @@ affiliated with QNAP.
 
 ### Where do I get help or report a problem?
 
-Open an [issue on GitHub](https://github.com/nader-eloshaiker/omv-qnap-plugin/issues).
+Read what other owners are saying, ask questions and share your results
+in the [OpenMediaVault forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs and model test reports go
+to [GitHub issues](https://github.com/nader-eloshaiker/omv-qnap-plugin/issues).
 Developers can start at the [documentation index](README.md).

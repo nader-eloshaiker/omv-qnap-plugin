@@ -1,6 +1,7 @@
 # openmediavault-qnap documentation
 
-Read only what your task needs. Each document stands alone and links to
+Read only what your task needs. Users discuss the plugin in the
+[OMV forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Each document stands alone and links to
 the others where they meet.
 
 | Document | Read it when you are… |
