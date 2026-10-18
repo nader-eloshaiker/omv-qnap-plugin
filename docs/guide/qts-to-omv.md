@@ -482,18 +482,52 @@ its bay light blinks red for 10 minutes, so you pull the right tray.
 
 ### Use the USB Copy and Reset buttons
 
-On OMV the buttons run a task you choose.
+On OMV the buttons run a task you choose. Here is a ready-made "copy my
+USB stick to the NAS" task, like QTS One Touch Copy.
 
-1. First create the task in **System > Scheduled Tasks** (for example a
-   copy job, or a command to shut down). You can leave it unscheduled.
-2. Then go to **System > QNAP > Buttons** and pick it under **USB Copy
-   button runs** (or **Reset button (hold 3 seconds) runs**).
-3. Tick **Beep on events** if you want QTS-style beeps.
+**Once, to set it up:**
+
+1. Plug the USB stick into the front USB port.
+2. **Storage > File Systems**: find the stick in the list (by its size)
+   and click **Mount** (the play button) if it isn't mounted yet, then
+   **Apply**. OMV remembers it from now on.
+3. **Storage > Shared Folders**: create two shared folders:
+   - one called `usbstick` on the **USB stick's** file system, with the
+     path `/`;
+   - one called `USB Copy` on your **data** file system.
+
+   The **Absolute path** column now shows where each one is, something
+   like `/srv/dev-disk-by-uuid-1234.../`. You need both paths in the next
+   step.
+4. **System > Scheduled Tasks > Create**: untick **Enabled** (it only
+   runs when you press the button), set **User** to `root`, and paste
+   this as the **Command**, replacing the two paths with the ones from
+   step 3:
+
+   ```
+   rsync -rt "/srv/PATH-OF-usbstick/" "/srv/PATH-OF-USB-Copy/$(date +%Y-%m-%d)/"
+   ```
+
+   It copies everything on the stick into a folder named after today's
+   date, and only copies new or changed files if you press it twice.
+   Give the task a tag such as "USB Copy" so you can find it, then
+   **Save** and **Apply**.
+5. **System > QNAP > Buttons**: pick the task under **When USB Copy is
+   pressed, run**, tick **Beep on events** if you like, **Save** and
+   **Apply**.
+
+**Every time:** plug the stick in and press **USB Copy**. The USB light
+blinks while it copies and stays on for 10 seconds when it is done. If
+the stick isn't there or the copy fails, the light goes out and (with
+beeps on) you hear three short beeps.
+
+The Reset button works the same way: pick a task under **When Reset is
+held for 3 seconds, run**.
 
 ![Buttons](../images/buttons.jpg)
 
-The Reset button no longer resets your password or network as it did in
-QTS: it only runs the task you choose, if any.
+Unlike QTS, the Reset button never resets your password or network: it
+only runs the task you choose, if any.
 
 ### Keep up to date
 

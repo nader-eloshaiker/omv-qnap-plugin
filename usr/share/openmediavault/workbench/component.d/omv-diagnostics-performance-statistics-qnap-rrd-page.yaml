@@ -10,4 +10,4 @@ data:
       - name: exec-qnap-fanspeed
         label: _("Fan speed")
       - name: exec-qnap-duty
-        label: _("Fan duty")
+        label: _("Fan power")

@@ -301,8 +301,9 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	}
 
 	/**
-	 * Plain names for the Status page and dashboard grid: "Processor"
-	 * instead of "Package id 0", "Bay 1" instead of "sda", and so on.
+	 * Plain, short names for the Status page and dashboard grid (whose
+	 * tiles show about 10 characters): "Processor" instead of
+	 * "Package id 0", "Bay 1" instead of "sda", and so on.
 	 */
 	private function friendlyRows(array $rows, array $slots)
 	{
@@ -328,30 +329,24 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 				break;
 			case "system":
 				$n++;
-				$row['label'] = $system > 1 ? sprintf(gettext("Inside the case %d"),
-					$n) : gettext("Inside the case");
+				$row['label'] = $system > 1 ? sprintf(gettext("Case %d"), $n) :
+					gettext("Case");
 				break;
 			case "disk":
 				$row['label'] = isset($bySlotDevice[$name]) ?
-					sprintf(gettext("%s drive"), $bySlotDevice[$name]['label']) :
-					sprintf(gettext("Drive %s"), $name);
+					$bySlotDevice[$name]['label'] : sprintf(gettext("Drive %s"), $name);
 				break;
 			case "nvme":
-				$label = sprintf(gettext("NVMe SSD %s"), substr($name, 4));
-				foreach ($bySlotDevice as $device => $slot) {
-					if (strpos($device, $name . "n") === 0) {
-						$label = sprintf(gettext("%s SSD"),
-							str_replace("qm2.0 ", "QM2 ", $slot['label']));
-					}
-				}
-				$row['label'] = $label;
+				$row['label'] = sprintf(gettext("SSD %d"),
+					(int)substr($name, 4) + 1);
 				break;
 			case "qm2":
 				if ($row['type'] === "temperature") {
-					$row['label'] .= " " . gettext("(card sensor)");
+					$row['label'] = preg_replace('/^qm2\.\d+-slot/', 'QM2 slot ',
+						$name);
 				} else {
 					$row['label'] = $row['type'] === "fan" ?
-						gettext("QM2 card fan") : gettext("QM2 card fan power");
+						gettext("QM2 fan") : gettext("QM2 power");
 				}
 				break;
 			case "fan":
@@ -361,7 +356,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 				} else if ($name === "pwm") {
 					$row['label'] = gettext("Fan power");
 				} else {
-					$row['label'] = gettext("QM2 card fan power");
+					$row['label'] = gettext("QM2 power");
 				}
 				break;
 			case "storage":
@@ -390,7 +385,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 				"nickname" => gettext("Name"),
 				"serial" => gettext("Serial number"),
 				"bios_version" => gettext("BIOS"),
-				"fw_version" => gettext("EC firmware"),
+				"fw_version" => gettext("Controller firmware"),
 				"manufactured" => gettext("Manufactured"),
 				"mainboard_model" => gettext("Mainboard"),
 				"backplane_model" => gettext("Backplane"),

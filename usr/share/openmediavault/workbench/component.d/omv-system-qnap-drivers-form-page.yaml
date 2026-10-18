@@ -55,6 +55,7 @@ data:
                 prop: loadmodule
     buttons:
       - text: _("Set up drivers")
+        class: omv-background-color-pair-primary
         execute:
           type: taskDialog
           taskDialog:
