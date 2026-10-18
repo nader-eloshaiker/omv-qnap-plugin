@@ -66,6 +66,7 @@ press the power button during the button step: it shuts the NAS down.
    | Different button codes | button table | PLAN §7, Phase 3 |
    | Failsafe did not reach 255 | fix before anything else | `qnapd failsafe`, [fan-control.md](../hardware/fan-control.md) |
    | Disks on unexpected transports (USB, SAS HBA) | fan source / LED rules | `DiskTemps`, `DiskLeds` |
+   | No beep from the pcspkr device | buzzer is wired elsewhere (EC?): no beeps on that model | PLAN Phase 3, `docs/hardware/<model>.md` |
 
 3. **Record it.** Add or update `docs/hardware/<model>.md` (copy the
    sections of [ts-253d.md](../hardware/ts-253d.md) that apply; state that

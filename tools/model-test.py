@@ -18,8 +18,9 @@
 #
 # --interactive also runs checks that need a person at the NAS and change
 # hardware state for a moment: LED mapping, buttons, a fan PWM sweep (the
-# fans slow down and may stop briefly) and disk-to-bay activity. Each step
-# asks first. qnapd is stopped during the checks and started again after.
+# fans slow down and may stop briefly), disk-to-bay activity and one short
+# beep. Each step asks first. qnapd is stopped during the checks and
+# started again after.
 
 import argparse
 import glob
@@ -43,6 +44,7 @@ SWEEP_STEPS = (255, 200, 160, 128, 100, 80, 64, 50, 40, 30, 20, 10, 0)
 SWEEP_HOLD = 10
 KEY_NAMES = {256: "BTN_0", 257: "BTN_1", 258: "BTN_2", 259: "BTN_3",
              116: "KEY_POWER"}
+EV_SND, SND_TONE = 0x12, 0x02
 
 
 def read(path):
@@ -229,6 +231,12 @@ def serial_ports():
     return lines
 
 
+def speaker():
+    """The pcspkr input device: the buzzer on the TS-253D."""
+    found = glob.glob("/dev/input/by-path/*pcspkr*")
+    return found[0] if found else None
+
+
 def kernel_log():
     for cmd in (["dmesg"], ["journalctl", "-k", "-b", "--no-pager", "-o", "cat"]):
         out = run(cmd)
@@ -315,6 +323,7 @@ def report():
         section("Disks (no S.M.A.R.T. read)", disk_rows),
         section("QM2 cards", qm2),
         section("Serial ports (front LCD candidates)", serial_ports()),
+        section("Speaker (buzzer candidate)", speaker() or "no pcspkr input device"),
         section("qnapd", qnapd, fold=True),
         section("PCI tree (lspci -tv)", run(["lspci", "-tv"]) or "lspci not available", fold=True),
         section("Kernel log (driver lines)", kernel_log(), fold=True),
@@ -502,6 +511,19 @@ class Checks:
             answer = ask("Which bay blinked? n = none:")
             self.note("activity %s (%s) -> bay %s" % (d["device"], d["attached"], answer or "?"))
 
+    def beep(self):
+        dev = speaker()
+        if not dev:
+            self.note("beep: no pcspkr input device")
+            return
+        event = lambda hz: struct.pack("llHHi", 0, 0, EV_SND, SND_TONE, hz)
+        with open(dev, "wb", buffering=0) as f:
+            f.write(event(1000))
+            time.sleep(0.2)
+            f.write(event(0))
+        self.note("beep via %s -> heard: %s" % (
+            os.path.basename(dev), "yes" if yes("Did the NAS beep?") else "no"))
+
     def run_all(self):
         print("Interactive checks. Stand at the NAS; each step asks first.")
         if not yes("Stop qnapd for the LED, button and fan checks? "
@@ -525,6 +547,8 @@ class Checks:
             self.note("qnapd after restart: %s" % state)
             if state == "active" and yes("Disk-to-bay activity check?"):
                 self.disk_activity()
+        if yes("Buzzer: one short beep (0.2 s)?"):
+            self.beep()
         notes = ask("\nAnything else you noticed (fan noise, odd LEDs)? One line:")
         if notes:
             self.note("notes: " + notes)
