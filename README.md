@@ -8,26 +8,90 @@ It does not use QNAP's proprietary binaries.
 Primary target is the **TS-253D**. Any model supported by qnap8528 should
 work, because all hardware is discovered at runtime.
 
-> **Status: early development (8.0.x, alpha quality).** Phase 1 is scaffolded and
-> unit-tested but not yet validated on hardware. See
-> [docs/PLAN.md](docs/PLAN.md).
+> **Status: feature complete (8.0.5).** Every feature below is verified on
+> the reference TS-253D with a QM2-2P-244A-A1 card (OMV 8.5). Other models
+> are untested: see [docs/hardware/models.md](docs/hardware/models.md) and
+> please send a [model test report](docs/testing/model-testing.md).
 
 ## Features
 
-| | Phase |
+**Fan control**
+- QTS-style Smart Fan: Quiet, Normal and Performance presets, a Custom
+  curve (ramp-up and full-speed temperature per source, PWM range,
+  hysteresis) and Manual.
+- Temperature sources: CPU (coretemp / k10temp), the embedded controller's
+  system sensors, hard disks (S.M.A.R.T., sleeping disks are never woken)
+  and NVMe SSDs. USB disks are ignored, since the chassis fans can't cool
+  them.
+- Hysteresis, CPU spike smoothing, critical-temperature override,
+  fan-failure detection and PWM read-back checks.
+- Fail safe: if the daemon stops or crashes, the chassis fans go to full
+  speed.
+- QM2 expansion cards: each card's fan follows its own M.2 slot and NVMe
+  temperatures, or can be left to the card.
+- Idle disks are left alone so they can spin down
+  ([what else keeps disks awake](docs/disk-sleep.md)).
+
+**LEDs**
+- Status LED following system and storage health, QTS style: green when
+  healthy, solid red for a fan or sensor fault or a failed or full volume,
+  blinking red for a degraded pool or array or a crashed daemon,
+  green/red alternating while a pool resilvers or an array rebuilds. A
+  scrub doesn't change it.
+- Disk bay and QM2 slot LEDs: present, activity and error (S.M.A.R.T.,
+  faulted ZFS or md member).
+- Locate: blink a bay's or QM2 slot's LED red for 10 minutes from the
+  Disks page.
+- Front panel brightness with an optional night schedule.
+- USB LED feedback for USB Copy.
+
+**Buttons and sounds**
+- USB Copy runs a chosen OMV Scheduled Task; Reset held 3 seconds runs
+  another. Chassis open is logged and mailed.
+- Optional QTS beeps through the buzzer: at boot, every 5 minutes while a
+  fan has stopped, when a pool turns degraded, failed, full or rebuilding,
+  and when USB Copy fails.
+
+**Monitoring and notifications**
+- Status page (fans, duty, every temperature, storage health) and a Disks
+  page (bays, QM2 slots, devices, LED state).
+- Dashboard: a fans and temperatures grid, a device widget, history graphs
+  and round gauges for fan duty and CPU, system, disk and NVMe
+  temperatures.
+- Performance graphs (Diagnostics › Performance statistics › QNAP):
+  temperatures, fan speed and fan duty, by hour, day, week, month and year.
+- Fault emails through OMV's own notifications ("QNAP hardware" event):
+  fan, temperature, disk or pool problems that last a minute, when they
+  clear, and when the daemon stops unexpectedly.
+
+**Hardware settings and drivers**
+- Power recovery after a power failure, EuP mode and the `reboot=efi`
+  kernel option (QNAP x86 boxes hang on reboot without it).
+- System page: model, serial number, BIOS, EC firmware, boards, QM2 cards.
+- Driver packages `qnap8528-dkms` and `qm2mod-dkms` in every release,
+  loading at boot from the Drivers page, and one-click kernel headers so
+  DKMS rebuilds the drivers after kernel updates.
+
+The plugin never talks to the EC from userspace and never runs QNAP
+binaries: all hardware access goes through the open source drivers.
+
+## Screenshots
+
+From the reference TS-253D; serial numbers, host name and addresses are
+blurred.
+
+| | |
 |-|-|
-| Smart Fan: Quiet / Normal / Performance / Custom curve / Manual | 1 |
-| Temperature sources: CPU, EC system sensors, HDD (S.M.A.R.T., no spin-up), NVMe | 1 |
-| Hysteresis, critical-temperature override, fan-failure detection, full-speed failsafe | 1 |
-| Status LED (green ok / red fault / blinking red on service failure) | 1 |
-| Front panel LED brightness, power recovery, EuP mode | 1 |
-| Load qnap8528 at boot (with `skip_hw_check`), `reboot=efi` kernel option | 1 |
-| Status page and dashboard widget for fans and temperatures | 1 |
-| RAID-aware status LED, disk LEDs (present/activity/error/locate), LED schedule, notifications | 2 |
-| USB Copy and Reset buttons run Scheduled Tasks, USB LED, QTS beeps | 3 |
-| QM2 expansion cards (qnap-qm2): card fan control from its slot and NVMe temperatures | 1 |
-| QM2 slot LEDs (present / error / locate) | 2 |
-| DKMS driver packages (qnap8528, qnap-qm2) | 2 |
+| ![Dashboard](docs/images/dashboard.jpg) Dashboard | ![Dashboard gauges](docs/images/dashboard-gauges.jpg) Dashboard gauges |
+| ![System › QNAP](docs/images/overview.jpg) System › QNAP | ![Status](docs/images/status.jpg) Status |
+| ![Fan control](docs/images/fan-control.jpg) Fan control | ![Custom fan curve](docs/images/fan-custom.jpg) Custom fan curve |
+| ![Front panel](docs/images/front-panel.jpg) Front panel | ![Disks](docs/images/disks.jpg) Disks |
+| ![Buttons](docs/images/buttons.jpg) Buttons | ![Power](docs/images/power.jpg) Power |
+| ![Drivers](docs/images/drivers.jpg) Drivers | ![System](docs/images/system.jpg) System |
+| ![Temperature graphs](docs/images/graphs-temperatures.jpg) Temperature graphs | ![Fan speed graphs](docs/images/graphs-fan-speed.jpg) Fan speed graphs |
+| ![Notification events](docs/images/notifications.jpg) Notification events | ![Device widget](docs/images/dashboard-device.jpg) Device widget |
+
+<img src="docs/images/navbar.jpg" alt="Navigation" width="180"> Navigation
 
 ## Requirements
 
