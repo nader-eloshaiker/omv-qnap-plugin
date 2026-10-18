@@ -36,6 +36,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setDriverSettings");
 		$this->registerMethod("setButtonSettings");
 		$this->registerMethod("getTasks");
+		$this->registerMethod("installHeaders");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
 		$this->registerMethod("getGauges");
@@ -80,6 +81,10 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$result['leds'] = implode(", ", $info['leds'] ?? []);
 		$result['rebootefiactive'] = !empty($info['reboot_efi']) ?
 			gettext("Yes") : gettext("No");
+		$result['headersstatus'] = !empty($info['headers']) ?
+			sprintf(gettext("Installed for %s"), $info['kernel'] ?? "") :
+			sprintf(gettext("Missing for %s: the drivers cannot be rebuilt for this kernel"),
+				$info['kernel'] ?? "?");
 		$cards = array_map(function($card) {
 			return sprintf("%s (%s, PIC %s)", $card['model'] ?? "",
 				$card['name'] ?? "", $card['pic_version'] ?? "?");
@@ -141,6 +146,39 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 			];
 		}
 		return $result;
+	}
+
+	/**
+	 * Install the kernel headers DKMS needs to build the drivers: for the
+	 * running kernel and, via its metapackage, for future kernels.
+	 */
+	public function installHeaders($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		\OMV\System\Apt::assertNotLocked();
+		$packages = $this->qnapd(["info", "--json"])['header_packages'] ?? [];
+		foreach ($packages as $package) {
+			if (!preg_match('/^[a-z0-9][a-z0-9.+-]+$/', $package)) {
+				throw new \OMV\Exception(sprintf(gettext(
+					"Unexpected package name '%s'."), $package));
+			}
+		}
+		if (empty($packages)) {
+			throw new \OMV\Exception(gettext(
+				"Cannot tell which kernel headers to install."));
+		}
+		return $this->execBgProc(function($bgStatusFilename, $bgOutputFilename)
+				use ($packages) {
+			$cmd = new \OMV\System\Process("apt-get", array_merge(
+				["--yes", "--no-install-recommends", "install"], $packages));
+			$cmd->setRedirect2to1();
+			$cmd->setEnv("DEBIAN_FRONTEND", "noninteractive");
+			if (0 !== ($exitStatus = $this->exec($cmd, $output,
+					$bgOutputFilename))) {
+				throw new \OMV\ExecException($cmd, $output, $exitStatus);
+			}
+			return $output;
+		});
 	}
 
 	public function setPowerSettings($params, $context)

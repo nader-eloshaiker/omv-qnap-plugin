@@ -26,8 +26,10 @@ statistics, for the graphs).
 every build) packages each driver from the upstream commit pinned in
 `drivers/<name>/source` with `dh-dkms`; the release attaches the .debs.
 DKMS builds the module on the NAS, so it needs headers for the
-**running** kernel: `linux-headers-amd64` (Debian kernel) or
-`proxmox-default-headers` (the Proxmox kernel omv-extras offers). The
+**running** kernel and for each kernel update: the Drivers page shows
+whether they are there and *Install kernel headers* installs
+`proxmox-headers-<release>` + `proxmox-headers-X.Y` (Proxmox kernel) or
+`linux-headers-<release>` + `linux-headers-<flavour>` (Debian kernel). The
 package's preinst removes a hand-made `dkms install .` of the same module
 (an unowned `/usr/src/<name>-<version>` registered in DKMS). New modules
 load at the next boot, or after stopping qnapd and reloading them. Load at

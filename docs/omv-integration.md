@@ -40,6 +40,7 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 | `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page, device widget) |
 | `getSlots` | admin | bays and QM2 slots `{id, label, device, model, size_gb, state, locate, locate_until}` from the status file (Disks page) |
 | `locate` | admin | `{id, enable}`: starts (10 min) or stops a locate request in `/run/qnapd/locate.json`; rejects ids qnapd does not report |
+| `installHeaders` | admin | background `apt-get install` of `qnapd info`'s `header_packages` (Drivers page task dialog) |
 | `getTasks` | admin | `[{uuid, description}]`: "None" plus OMV's user-defined Scheduled Tasks (Buttons page) |
 | `set*Settings` | admin | stores a subset; `setButtonSettings` rejects tasks that no longer exist |
 

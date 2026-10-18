@@ -562,8 +562,11 @@ user, not just the LED. Options, in order of preference:
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
       (`drivers/`), released with the plugin, recommended / suggested by it
       (8.0.2)
-- [ ] Install headers automatically (`linux-headers-amd64` or
-      `proxmox-default-headers` for the OMV Proxmox kernel)
+- [x] Kernel headers (8.0.5): the Drivers page shows whether the running
+      kernel has headers, and *Install kernel headers* installs them plus
+      the metapackage for future kernels (`proxmox-headers-X.Y` or
+      `linux-headers-<flavour>`). Not from postinst: apt holds the lock
+      while the plugin installs.
 - [ ] Upstream contributions to qnap8528 if needed (README button table fix,
       buzzer support, EC auto-fan restore)
 

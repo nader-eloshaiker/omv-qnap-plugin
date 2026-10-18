@@ -1,3 +1,13 @@
+openmediavault-qnap (8.0.5) stable; urgency=low
+
+  * Kernel headers: the Drivers page shows whether headers for the running
+    kernel are installed, and Install kernel headers adds them plus the
+    metapackage that brings headers for future kernels
+    (proxmox-headers-X.Y on the Proxmox kernel, linux-headers-<flavour> on
+    Debian), so DKMS keeps rebuilding the drivers after kernel updates.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sun, 18 Oct 2026 14:16:50 +1100
+
 openmediavault-qnap (8.0.4) stable; urgency=low
 
   * Buttons page (System > QNAP > Buttons): the USB Copy button runs a
