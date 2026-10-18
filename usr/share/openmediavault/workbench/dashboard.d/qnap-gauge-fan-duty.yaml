@@ -5,8 +5,8 @@ data:
   permissions:
     role:
       - admin
-  title: _("QNAP fan duty")
-  description: _("Chassis fan duty cycle set by the plugin.")
+  title: _("QNAP fan power")
+  description: _("How hard the plugin is running the case fans.")
   type: chart
   reloadPeriod: 10000
   chart:
@@ -22,6 +22,6 @@ data:
       formatter: template
       formatterConfig: "{{ value | tofixed(0) }} %"
     dataConfig:
-      - label: _("Duty")
+      - label: _("Power")
         prop: fanduty
         backgroundColor: "#5dacdf"
