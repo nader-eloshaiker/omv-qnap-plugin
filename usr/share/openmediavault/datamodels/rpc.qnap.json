@@ -71,6 +71,18 @@
 	},
 	{
 		"type": "rpc",
+		"id": "rpc.qnap.setbuttonsettings",
+		"params": {
+			"type": "object",
+			"properties": {
+				"beep": { "type": "boolean", "required": true },
+				"usbcopytask": { "type": "string", "pattern": "^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?$", "required": true },
+				"resettask": { "type": "string", "pattern": "^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?$", "required": true }
+			}
+		}
+	},
+	{
+		"type": "rpc",
 		"id": "rpc.qnap.setdriversettings",
 		"params": {
 			"type": "object",

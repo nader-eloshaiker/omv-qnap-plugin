@@ -37,9 +37,11 @@ import json
 import logging
 import os
 import re
+import select
 import signal
 import socket
 import statistics
+import struct
 import subprocess
 import sys
 import threading
@@ -55,6 +57,8 @@ IDENTITY_FILE = os.environ.get("QNAPD_IDENTITY", "/run/qnapd.identity.json")
 # writes it; qnapd, the only hardware writer, applies it.
 LOCATE_FILE = os.environ.get("QNAPD_LOCATE", "/run/qnapd/locate.json")
 MOUNTS_FILE = "/proc/mounts"
+INPUT_DIR = os.environ.get("QNAPD_INPUT_DIR", "/dev/input/by-path")
+UPTIME_FILE = "/proc/uptime"
 # qnap8528 logs the model it matched ("device model is TS-253D") but does
 # not export it in sysfs. dmesg first; the journal if the ring buffer wrapped.
 KERNEL_LOG_COMMANDS = (["dmesg"],
@@ -218,6 +222,11 @@ class Settings:
         self.lednightend = hhmm(raw.get("lednightend"), "07:00")
         self.lednightbrightness = min(100, max(0, to_int(
             raw.get("lednightbrightness"), 10)))
+        self.beep = to_bool(raw.get("beep", False))
+        # Rendered by salt from the chosen Scheduled Tasks:
+        # {"script": ..., "user": ...} or absent.
+        self.usbcopy = self._task(raw.get("usbcopy"))
+        self.reset = self._task(raw.get("reset"))
         self.use = {src: to_bool(raw.get("use" + src, True))
                     for src in SOURCES}
         if self.fanmode in PRESETS:
@@ -241,6 +250,13 @@ class Settings:
         # QM2 cards: each card fan follows its own slot and NVMe sensors.
         self.use["qm2"] = to_bool(raw.get("useqm2", True))
         self.ranges["qm2"] = self.ranges["nvme"]
+
+    @staticmethod
+    def _task(value):
+        if isinstance(value, dict) and isinstance(value.get("script"), str):
+            return {"script": value["script"],
+                    "user": str(value.get("user") or "root")}
+        return None
 
     @staticmethod
     def _pwm(value, default):
@@ -1069,6 +1085,221 @@ def set_panel_brightness(value):
 
 
 # --------------------------------------------------------------------------
+# Buzzer, buttons and the USB LED
+# --------------------------------------------------------------------------
+
+INPUT_EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit
+EV_KEY, EV_SND, SND_TONE = 0x01, 0x12, 0x02
+BTN_CHASSIS, BTN_RESET, BTN_USBCOPY = 256, 257, 258  # verified on a TS-253D
+# OMV writes each Scheduled Task to a script named after its uuid.
+TASK_SCRIPT = re.compile(r"^/var/lib/openmediavault/cron\.d/"
+                         r"userdefined-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+
+
+def input_device(name):
+    found = sorted(glob.glob(os.path.join(INPUT_DIR, "platform-%s-event*"
+                                          % name)))
+    return found[0] if found else None
+
+
+def uptime():
+    try:
+        return float((read(UPTIME_FILE) or "").split()[0])
+    except (IndexError, ValueError):
+        return None
+
+
+class Beeper:
+    """QTS buzzer patterns on the PC speaker (the buzzer is the pcspkr line
+    on the TS-253D). S = short, L = long; patterns play one at a time in
+    the background."""
+
+    TONE_HZ = 1000
+    SHORT, LONG, GAP = 0.5, 1.5, 0.4
+    PATTERNS = {
+        "startup": "S", "shutdown": "S", "reset": "S",
+        "usbcopy-failed": "SSS",
+        "fan-failure": "LLL",
+        "storage": "LL",  # degraded, or a rebuild started
+    }
+
+    def __init__(self, enabled):
+        self.enabled = enabled
+        self.device = input_device("pcspkr")
+        self.lock = threading.Lock()
+
+    def beep(self, event, wait=False):
+        if not (self.enabled and self.device):
+            return
+        thread = threading.Thread(target=self.play,
+                                  args=(self.PATTERNS[event],), daemon=True)
+        thread.start()
+        if wait:
+            thread.join(10)
+
+    def play(self, pattern):
+        with self.lock:
+            try:
+                with open(self.device, "wb", buffering=0) as f:
+                    for i, mark in enumerate(pattern):
+                        if i:
+                            time.sleep(self.GAP)
+                        f.write(INPUT_EVENT.pack(0, 0, EV_SND, SND_TONE,
+                                                 self.TONE_HZ))
+                        time.sleep(self.LONG if mark == "L" else self.SHORT)
+                        f.write(INPUT_EVENT.pack(0, 0, EV_SND, SND_TONE, 0))
+            except OSError as e:
+                log.warning("Cannot beep: %s", e)
+
+
+class UsbLed:
+    """Front USB LED (qnap8528::usb, blue): blinks while USB Copy runs."""
+
+    BLINK_MS = 400  # inside the EC's hardware blink window (280-470 ms)
+
+    def __init__(self, name="qnap8528::usb"):
+        self.path = sysfs("class", "leds", name)
+
+    def set(self, state):
+        if not os.path.isdir(self.path):
+            return
+        try:
+            write(os.path.join(self.path, "trigger"), "none")
+            write(os.path.join(self.path, "brightness"),
+                  0 if state == "off" else 1)
+            if state == "blink":
+                write(os.path.join(self.path, "trigger"), "timer")
+                for name in ("delay_on", "delay_off"):
+                    write(os.path.join(self.path, name), self.BLINK_MS)
+        except OSError as e:
+            log.warning("Failed to set USB LED: %s", e)
+
+
+def run_task(task):
+    """Run an OMV Scheduled Task's script as its user; True on exit 0."""
+    script, user = task["script"], task.get("user") or "root"
+    if not TASK_SCRIPT.match(script) or not os.access(script, os.X_OK):
+        log.warning("Scheduled task %s not found; save it in OMV first",
+                    script)
+        return False
+    cmd = [script] if user == "root" else ["runuser", "-u", user, "--",
+                                           script]
+    try:
+        done = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.PIPE, text=True)
+    except OSError as e:
+        log.warning("Cannot run %s: %s", script, e)
+        return False
+    if done.returncode:
+        log.warning("%s exited with %d: %s", script, done.returncode,
+                    done.stderr.strip()[-500:])
+    return done.returncode == 0
+
+
+class Buttons:
+    """The qnap8528 buttons. USB Copy runs its Scheduled Task when released;
+    Reset runs its task when held RESET_HOLD seconds (longer holds are
+    reserved, as in QTS); chassis open is logged and mailed. One task runs
+    at a time."""
+
+    RESET_HOLD = 3
+    RESET_LONG = 10
+    DONE_SECONDS = 10  # USB LED solid after a successful copy
+
+    def __init__(self, settings, beeper, usb_led=None):
+        self.settings = settings
+        self.beeper = beeper
+        self.usb_led = usb_led or UsbLed()
+        self.pressed = {}
+        self.busy = threading.Lock()
+        self.stop = threading.Event()
+        self.thread = None
+
+    def handle(self, code, value, now):
+        """One key event (value 1 press, 0 release); returns the action."""
+        if value == 1:
+            self.pressed[code] = now
+            if code == BTN_CHASSIS:
+                log.warning("Chassis opened")
+                if self.settings.notify:
+                    send_mail("QNAP hardware on %s: chassis opened"
+                              % socket.gethostname(),
+                              "The chassis-open switch was triggered.")
+                return "chassis"
+            return None
+        if value != 0 or code not in self.pressed:
+            return None
+        held = now - self.pressed.pop(code)
+        if code == BTN_USBCOPY:
+            log.info("USB Copy pressed")
+            return self.start_task("usbcopy", self.settings.usbcopy)
+        if code == BTN_RESET:
+            log.info("Reset held %.1f s", held)
+            if held >= self.RESET_LONG or held < self.RESET_HOLD:
+                return None
+            self.beeper.beep("reset")
+            return self.start_task("reset", self.settings.reset)
+        return None
+
+    def start_task(self, name, task):
+        if not task:
+            return None
+        if not self.busy.acquire(blocking=False):
+            log.info("%s ignored: a button task is still running", name)
+            return None
+        thread = threading.Thread(target=self.run, args=(name, task),
+                                  name=name, daemon=True)
+        thread.start()
+        return name
+
+    def run(self, name, task):
+        try:
+            if name == "usbcopy":
+                self.usb_led.set("blink")
+            ok = run_task(task)
+            log.info("%s task %s", name, "finished" if ok else "failed")
+            if name == "usbcopy":
+                self.usb_led.set("on" if ok else "off")
+                if ok:
+                    self.stop.wait(self.DONE_SECONDS)
+                    self.usb_led.set("off")
+                else:
+                    self.beeper.beep("usbcopy-failed")
+        finally:
+            self.busy.release()
+
+    def start(self):
+        device = input_device(DRIVER)
+        if not device:
+            log.info("No %s input device: buttons not handled", DRIVER)
+            return
+
+        def loop():
+            try:
+                with open(device, "rb", buffering=0) as f:
+                    while not self.stop.is_set():
+                        if not select.select([f], [], [], 1)[0]:
+                            continue
+                        data = f.read(INPUT_EVENT.size)
+                        if len(data) < INPUT_EVENT.size:
+                            continue
+                        _, _, kind, code, value = INPUT_EVENT.unpack(data)
+                        if kind == EV_KEY:
+                            self.handle(code, value, time.monotonic())
+            except OSError as e:
+                log.warning("Button input failed: %s", e)
+        self.thread = threading.Thread(target=loop, name="buttons",
+                                       daemon=True)
+        self.thread.start()
+
+    def finish(self):
+        self.stop.set()
+        if self.thread:
+            self.thread.join(2)
+
+
+# --------------------------------------------------------------------------
 # Fan curve
 # --------------------------------------------------------------------------
 
@@ -1293,6 +1524,10 @@ class Daemon:
         self.storage = (None, set(), "ok", [])
         self.brightness = None  # Front panel brightness last written.
         self.notifier = Notifier(settings.notify)
+        self.beeper = Beeper(settings.beep)
+        self.buttons = Buttons(settings, self.beeper)
+        self.fan_beep = None  # when the fan-failure alarm last sounded
+        self.storage_seen = None  # storage state at the last step
         self.led = StatusLed()
         self.chassis = Zone("chassis", MIN_PWM_CHASSIS)
         self.cards = {}
@@ -1406,6 +1641,7 @@ class Daemon:
             self.brightness = brightness
         if self.settings.ledstatus:
             self.led.set(status_led_state(faults, storage[0]))
+        self.alarms(faults, storage[0], now)
         self.notifier.update(hardware_problems(faults, reason, errors,
                                                storage), now)
         status = build_status(self.hw, rows, self.chassis.pwm,
@@ -1415,6 +1651,23 @@ class Daemon:
                               else ())
         write_status(status)
         return status
+
+    FAN_ALARM_SECONDS = 300  # QTS: 3 long beeps every 5 minutes
+
+    def alarms(self, faults, storage_state, now):
+        """QTS beeps: a stopped fan every FAN_ALARM_SECONDS; storage turning
+        degraded, rebuilding, failed or full (not the state at start)."""
+        if any("not spinning" in f for f in faults):
+            if self.fan_beep is None or \
+                    now - self.fan_beep >= self.FAN_ALARM_SECONDS:
+                self.beeper.beep("fan-failure")
+                self.fan_beep = now
+        else:
+            self.fan_beep = None
+        if self.storage_seen is not None and storage_state != "ok" and \
+                storage_state != self.storage_seen:
+            self.beeper.beep("storage")
+        self.storage_seen = storage_state
 
     def disk_errors(self, now):
         """Disks to show red: failed S.M.A.R.T. or faulted in an array.
@@ -1447,6 +1700,9 @@ class Daemon:
                  ", ".join(c.name for c in self.hw.qm2_cards()) or "none")
         if self.disk_leds:
             self.disk_leds.start()
+        self.buttons.start()
+        if (uptime() or 1e9) < 300:  # booting, not a restart on Apply
+            self.beeper.beep("startup")
         while not self.stop.is_set():
             try:
                 self.step()
@@ -1455,9 +1711,22 @@ class Daemon:
                 failsafe(qm2=self.settings.use["qm2"])
             self.stop.wait(self.settings.interval)
         log.info("Stopping")
+        self.buttons.finish()
         if self.disk_leds:
             self.disk_leds.finish()
+        if system_stopping():
+            self.beeper.beep("shutdown", wait=True)
         return 0
+
+
+def system_stopping():
+    """True while systemd shuts the system down (not a service restart)."""
+    try:
+        state = subprocess.run(["systemctl", "is-system-running"],
+                               capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return state.stdout.strip() == "stopping"
 
 
 def failsafe(service_result=None, qm2=None):

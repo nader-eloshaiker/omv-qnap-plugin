@@ -102,5 +102,11 @@ and confirm which LED blinks. Protocol:
 
 ## Not done yet
 
-USB LED for One Touch Copy (Phase 3), Btrfs device errors in the status
-LED.
+Btrfs device errors in the status LED.
+
+## USB LED
+
+`qnap8528::usb` (blue) blinks (hardware, 400 ms) while the USB Copy task
+runs, stays on for 10 s after it succeeds, and goes off; off on failure
+(with three short beeps when beeps are on). qnapd leaves it alone
+otherwise.

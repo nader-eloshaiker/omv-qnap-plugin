@@ -329,19 +329,21 @@ qnap8528's `examples/qnap-set-status.sh`.
 - Keys (verified on a TS-253D, 2026-10-17): `BTN_1` Reset, `BTN_2` USB
   Copy, `BTN_0` chassis open (untested). Press and release arrive as
   separate events; measure hold time in userspace. No autorepeat (EV=3).
-- Actions (admin-configured, validated):
-  - **USB Copy**: none | run a command (e.g. an OMV rsync job via
-    `omv-rpc` / a script). USB LED blinks while the action runs, solid on
-    success, 3 short beeps on failure (QTS behaviour).
-  - **Reset** short press (≥3 s): none | command. Default: none. Never a
-    factory reset of OMV. A sensible built-in option to consider:
-    `omv-firstaid`-style "reset web UI admin password / network to DHCP" —
-    needs explicit design + confirmation in the UI.
-  - **Reset long press (≥10 s)**: none (reserved).
-  - **Chassis open**: log + OMV notification.
+- Actions (8.0.4, decided 2026-10-18): each button runs an OMV
+  **Scheduled Task** picked on the Buttons page (none by default), so the
+  copy logic stays in OMV, editable and testable there:
+  - **USB Copy** (on release): USB LED blinks while the task runs, solid
+    10 s on success, 3 short beeps on failure (QTS behaviour). One task at
+    a time; presses while one runs are ignored.
+  - **Reset** held 3–10 s: its task, with one short beep. Shorter presses
+    and holds of 10 s or more do nothing. Never a reset of OMV itself.
+  - **Chassis open**: log + mail (when the QNAP notification is on).
 - Power button stays with systemd-logind (ACPI). Document
   `HandlePowerKey=` in `/etc/systemd/logind.conf` instead of reimplementing.
-- **Beeper** (optional): QTS uses beeps for start/shutdown/fan failure.
+- **Beeper** (8.0.4, `beep`, off by default): QTS patterns, see
+  [reference/qts-behaviour.md](reference/qts-behaviour.md); startup only
+  when the system booted < 5 min ago and shutdown only while systemd is
+  stopping, so an Apply's restart stays silent. QTS uses beeps for start/shutdown/fan failure.
   qnap8528 exposes no buzzer, but the buzzer is the PC-speaker line:
   `EV_SND`/`SND_TONE` on the `pcspkr` input device beeps on the TS-253D
   (2026-10-18, [hardware/ts-253d.md](hardware/ts-253d.md)). No EC access.
@@ -543,11 +545,12 @@ user, not just the LED. Options, in order of preference:
 ### Phase 3 — Buttons & sounds
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
       USB Copy = BTN_2)
-- [ ] evdev reader and hold-time detection in qnapd
-- [ ] USB Copy action + USB LED feedback
-- [ ] Reset button actions (safe defaults)
+- [x] evdev reader and hold-time detection in qnapd (8.0.4, unit-tested)
+- [ ] USB Copy action + USB LED feedback (8.0.4; hardware check pending)
+- [ ] Reset button actions (safe defaults) (8.0.4; hardware check pending)
 - [x] Beeper investigation: `pcspkr` input device (TS-253D, 2026-10-18)
 - [ ] Chassis-open event; beeps for start, shutdown, fan failure, USB Copy
+      (8.0.4; implemented, hardware check pending)
 
 ### Phase 4 — Driver integration
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits

@@ -160,6 +160,20 @@
 			"maximum": 100,
 			"default": 10
 		},
+		"beep": {
+			"type": "boolean",
+			"default": false
+		},
+		"usbcopytask": {
+			"type": "string",
+			"pattern": "^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?$",
+			"default": ""
+		},
+		"resettask": {
+			"type": "string",
+			"pattern": "^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?$",
+			"default": ""
+		},
 		"powerrecovery": {
 			"type": "string",
 			"enum": ["unchanged", "off", "on", "last"],
