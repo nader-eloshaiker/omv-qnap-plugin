@@ -367,8 +367,18 @@ hardware. One click installs them.
 3. Wait. This installs the hardware drivers and everything they need to
    build for your system, then turns on fan control. It takes **a few
    minutes**. Leave the page open until it finishes.
-4. When it's done, the page shows the **qnap8528 driver** as loaded (and
-   the QM2 driver too, if you have a QM2 card).
+4. When it's done, **Hardware drivers** and **Driver build files** both
+   say **Ready ✓**.
+
+**Do I ever need to click it again?** Only if **Hardware drivers** stops
+saying *Ready ✓*, which normally means you installed a newer version of
+this plugin that brings newer drivers. Updates to OpenMediaVault, Debian
+or other plugins never need it, and when a system update brings a new
+Linux kernel the drivers are rebuilt for it automatically.
+
+Leave **Skip the controller check** (under *Advanced*) unticked. It is
+only for a few models with a different controller chip, and Set up
+drivers ticks it for you on those.
 
 ![The Drivers page](../images/drivers.jpg)
 
@@ -534,7 +544,9 @@ only runs the task you choose, if any.
 - **System > Update Management** updates OMV and Debian.
 - For a new plugin version, download the new `.deb` from the
   [releases page](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases/latest)
-  and upload it in **System > Plugins** as in step 7.
+  and upload it in **System > Plugins** as in step 7. Then open
+  **System > QNAP > Drivers**: if **Hardware drivers** doesn't say
+  *Ready ✓*, click **Set up drivers** once.
 
 ---
 
