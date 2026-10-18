@@ -15,7 +15,7 @@ data:
         get:
           method: getSlots
     columns:
-      - name: _("Slot")
+      - name: _("Bay")
         prop: label
         flexGrow: 1
       - name: _("Device")
@@ -29,8 +29,8 @@ data:
         flexGrow: 1
         cellTemplateName: template
         cellTemplateConfig: "{% if size_gb %}{{ size_gb }} GB{% endif %}"
-      - name: _("LED")
-        prop: state
+      - name: _("Light")
+        prop: statetext
         flexGrow: 1
       - name: _("Locate")
         prop: locate

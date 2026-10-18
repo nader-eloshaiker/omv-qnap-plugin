@@ -1,0 +1,24 @@
+# GitHub Pages site for openmediavault-qnap (built from /docs).
+# index.md is the home page; README.md stays the developer index.
+title: openmediavault-qnap
+description: >-
+  Free OpenMediaVault plugin for QNAP NAS: quiet fan control, working LEDs,
+  buttons, temperature graphs and alerts when you replace QTS with OMV.
+url: https://nader-eloshaiker.github.io
+baseurl: /omv-qnap-plugin
+lang: en
+theme: jekyll-theme-cayman
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
+github:
+  is_project_page: true
+  repository_url: https://github.com/nader-eloshaiker/omv-qnap-plugin
+# Maintainer notes, not useful to visitors. Developer docs stay published
+# so links from README.md keep working.
+exclude:
+  - seo-notes.md

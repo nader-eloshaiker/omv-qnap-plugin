@@ -1,3 +1,18 @@
+openmediavault-qnap (8.0.6) stable; urgency=low
+
+  * One-file install: the driver packages now ship inside the plugin, so
+    it can be uploaded on System > Plugins without a command line.
+  * Drivers page: a Set up drivers button installs the kernel headers and
+    the bundled drivers, starts them (retrying with skip_hw_check on models
+    that need it), loads them at boot and turns fan control on. It replaces
+    Install kernel headers, and also updates the drivers after a plugin
+    update.
+  * Plain-language pages for people new to Linux: fan speeds in percent,
+    no jargon, rare options under Advanced, friendly sensor names on the
+    Status page and dashboard grid, and plain light states on Disks.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sun, 18 Oct 2026 15:05:10 +1100
+
 openmediavault-qnap (8.0.5) stable; urgency=low
 
   * Kernel headers: the Drivers page shows whether headers for the running

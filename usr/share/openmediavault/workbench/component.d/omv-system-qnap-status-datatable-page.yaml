@@ -15,8 +15,8 @@ data:
         get:
           method: getStatus
     columns:
-      - name: _("Type")
-        prop: type
+      - name: _("What")
+        prop: kind
         flexGrow: 1
       - name: _("Sensor")
         prop: label

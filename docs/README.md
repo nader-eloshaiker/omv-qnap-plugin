@@ -5,6 +5,7 @@ the others where they meet.
 
 | Document | Read it when you are… |
 |-|-|
+| [guide/qts-to-omv.md](guide/qts-to-omv.md) | a QNAP owner moving from QTS to OMV: step-by-step user guide from backup to installing the plugin |
 | [architecture.md](architecture.md) | new to the repo, or changing how components talk to each other |
 | [hardware/ts-253d.md](hardware/ts-253d.md) | touching anything that reads or writes hardware; needing measured facts about the reference box |
 | [hardware/fan-control.md](hardware/fan-control.md) | changing the fan curve, presets, hysteresis, floors, failsafe |

@@ -14,7 +14,7 @@ docker-deb:
 	mkdir -p dist
 	docker run --rm -v "$(CURDIR)":/src:ro -v "$(CURDIR)/dist":/dist $(DEBIAN_IMAGE) sh -ec '\
 		apt-get update -qq && \
-		apt-get install -y -qq --no-install-recommends build-essential debhelper fakeroot >/dev/null && \
+		apt-get install -y -qq --no-install-recommends build-essential debhelper dh-dkms fakeroot git ca-certificates python3 >/dev/null && \
 		cp -r /src /build && cd /build && rm -rf dist && \
 		dpkg-buildpackage -us -uc -b && cp ../*.deb /dist/'
 	ls -l dist/*.deb

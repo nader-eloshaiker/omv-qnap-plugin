@@ -13,32 +13,32 @@ data:
     fields:
       - type: select
         name: powerrecovery
-        label: _("After a power failure")
+        label: _("When power comes back after a power cut")
         value: unchanged
         store:
           data:
-            - ["unchanged", _("Do not change")]
+            - ["unchanged", _("Keep the current setting")]
             - ["off", _("Stay off")]
-            - ["on", _("Power on")]
-            - ["last", _("Restore previous state")]
+            - ["on", _("Turn on")]
+            - ["last", _("Go back to how it was (on if it was on)")]
       - type: select
         name: eupmode
-        label: _("EuP mode")
+        label: _("Lowest standby power (EuP)")
         value: unchanged
-        hint: _("When enabled, standby power is minimised; Wake-on-LAN and power recovery are unavailable.")
+        hint: _("Uses almost no power when switched off, but the NAS can then not be woken over the network or turn itself on after a power cut.")
         store:
           data:
-            - ["unchanged", _("Do not change")]
-            - ["off", _("Disabled")]
-            - ["on", _("Enabled")]
+            - ["unchanged", _("Keep the current setting")]
+            - ["off", _("Off")]
+            - ["on", _("On")]
       - type: checkbox
         name: rebootefi
-        label: _("Use the EFI reboot method (reboot=efi)")
+        label: _("Fix restarts that hang (recommended)")
         value: true
-        hint: _("On by default. Adds reboot=efi to the kernel command line via /etc/default/grub.d and runs update-grub. Fixes reboots hanging on QNAP x86 models such as the TS-253D. Takes effect after the next reboot; GRUB only.")
+        hint: _("Many QNAP models freeze instead of restarting under Linux. This fixes it from the next restart on. Leave it on unless you know you do not need it.")
       - type: textInput
         name: rebootefiactive
-        label: _("reboot=efi active in running kernel")
+        label: _("Restart fix active now")
         readonly: true
         submitValue: false
     buttons:

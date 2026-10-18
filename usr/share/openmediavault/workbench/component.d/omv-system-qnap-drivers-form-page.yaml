@@ -10,57 +10,62 @@ data:
         method: getHardwareSettings
       post:
         method: setDriverSettings
+    hints:
+      - type: info
+        text: _("New here? Click Set up drivers. It installs everything your QNAP hardware needs and turns on fan control. Run it again whenever this page says an update is available.")
     fields:
       - type: textInput
         name: driverstatus
-        label: _("qnap8528 driver")
+        label: _("Hardware drivers")
         readonly: true
         submitValue: false
+      - type: textInput
+        name: headersstatus
+        label: _("Driver build files")
+        readonly: true
+        submitValue: false
+        hint: _("The drivers are rebuilt automatically after OpenMediaVault updates the system, using these files.")
+      - type: textInput
+        name: qm2cards
+        label: _("QM2 expansion cards")
+        readonly: true
+        submitValue: false
+      - type: divider
+        title: _("Advanced")
       - type: checkbox
         name: loadmodule
-        label: _("Load the qnap8528 module at boot")
+        label: _("Start the hardware driver at boot")
         value: false
-        hint: _("Needs the qnap8528-dkms package from the plugin's release page.")
+        hint: _("Set up drivers turns this on for you.")
+      - type: checkbox
+        name: loadqm2
+        label: _("Start the QM2 card driver at boot")
+        value: false
+        hint: _("Only for QM2 expansion cards. Set up drivers turns this on when it finds a card.")
       - type: checkbox
         name: skiphwcheck
-        label: _("Skip the chip ID check (skip_hw_check)")
+        label: _("Skip the controller check")
         value: false
-        hint: _("Only needed if the driver fails to load because the chip ID check fails (see dmesg). Takes effect when the module is next loaded.")
+        hint: _("Only for models whose hardware driver will not start otherwise. Set up drivers turns this on when it is needed.")
         modifiers:
           - type: visible
             constraint:
               operator: truthy
               arg0:
                 prop: loadmodule
-      - type: textInput
-        name: qm2cards
-        label: _("QM2 expansion cards")
-        readonly: true
-        submitValue: false
-      - type: checkbox
-        name: loadqm2
-        label: _("Load the qm2mod module at boot")
-        value: false
-        hint: _("For QM2 cards. Needs the qm2mod-dkms package from the plugin's release page.")
-      - type: textInput
-        name: headersstatus
-        label: _("Kernel headers")
-        readonly: true
-        submitValue: false
-        hint: _("DKMS builds the drivers for each kernel and needs its headers. Install kernel headers adds them for the running kernel and, through its metapackage, for future kernel updates.")
     buttons:
+      - text: _("Set up drivers")
+        execute:
+          type: taskDialog
+          taskDialog:
+            config:
+              title: _("Setting up the QNAP drivers ...")
+              startOnInit: true
+              request:
+                service: Qnap
+                method: setupDrivers
       - template: submit
       - template: cancel
         execute:
           type: url
           url: "/system/qnap"
-      - text: _("Install kernel headers")
-        execute:
-          type: taskDialog
-          taskDialog:
-            config:
-              title: _("Installing kernel headers ...")
-              startOnInit: true
-              request:
-                service: Qnap
-                method: installHeaders

@@ -558,6 +558,13 @@ user, not just the LED. Options, in order of preference:
 - [ ] Chassis-open event; fan-failure beeps (8.0.4; unit-tested; chassis
       open needs the lid off, the fan alarm a stalled fan)
 
+### Phase 5 — Easy for QTS refugees (8.0.6)
+- [x] One-file install (drivers bundled in the plugin) and *Set up drivers*
+- [x] Plain-language pages; fan speeds in percent; friendly sensor names
+- [x] QTS → OMV guide (`docs/guide/qts-to-omv.md`), README and GitHub
+      Pages landing page for search
+- [ ] Get into omv-extras so it installs from the Plugins list
+
 ### Phase 4 — Driver integration
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
       (`drivers/`), released with the plugin, recommended / suggested by it
