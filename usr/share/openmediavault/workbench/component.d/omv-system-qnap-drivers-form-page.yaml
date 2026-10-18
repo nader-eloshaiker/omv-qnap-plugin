@@ -12,7 +12,7 @@ data:
         method: setDriverSettings
     hints:
       - type: info
-        text: _("New here? Click Set up drivers. It installs everything your QNAP hardware needs and turns on fan control. Run it again whenever this page says an update is available.")
+        text: _("Click Set up drivers once, right after installing this plugin. After that, only click it again if Hardware drivers below does not say Ready, for example after an update of this plugin that brings newer drivers. OpenMediaVault, Debian and other plugin updates never need it.")
     fields:
       - type: textInput
         name: driverstatus
@@ -24,7 +24,7 @@ data:
         label: _("Driver build files")
         readonly: true
         submitValue: false
-        hint: _("The drivers are rebuilt automatically after OpenMediaVault updates the system, using these files.")
+        hint: _("When a system update installs a new Linux kernel, the drivers are rebuilt for it automatically using these files. Nothing to do.")
       - type: textInput
         name: qm2cards
         label: _("QM2 expansion cards")
@@ -46,7 +46,7 @@ data:
         name: skiphwcheck
         label: _("Skip the controller check")
         value: false
-        hint: _("Only for models whose hardware driver will not start otherwise. Set up drivers turns this on when it is needed.")
+        hint: _("Leave this off. A few models with a different controller chip need it to start the driver; Set up drivers ticks it for you on those.")
         modifiers:
           - type: visible
             constraint:

@@ -1,3 +1,12 @@
+openmediavault-qnap (8.0.7) stable; urgency=low
+
+  * Drivers page: says plainly when to click Set up drivers (once after
+    installing; again only if Hardware drivers is not Ready, e.g. after a
+    plugin update with newer drivers; never for other updates), and that
+    Skip the controller check should stay off.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sun, 18 Oct 2026 15:29:08 +1100
+
 openmediavault-qnap (8.0.6) stable; urgency=low
 
   * One-file install: the driver packages now ship inside the plugin, so
