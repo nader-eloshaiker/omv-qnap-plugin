@@ -27,7 +27,7 @@ It is free and open source (GPL), built on the open source
 QNAP's own software. If anything goes wrong, the fans go to full speed so
 your NAS stays cool.
 
-> **Status: feature complete (8.0.6).** Every feature below is verified on
+> **Status: feature complete (8.0.8).** Every feature below is verified on
 > the reference **TS-253D** with a QM2-2P-244A-A1 card (OMV 8.5). The
 > qnap8528 driver supports many more QNAP models (TS-x51, TS-x53, TS-x64,
 > TS-x73A, TVS and others), so they should work, but they have not been
@@ -52,6 +52,10 @@ a step-by-step guide to backing up, installing OMV on your QNAP and
 setting up this plugin.
 
 Project website: <https://nader-eloshaiker.github.io/omv-qnap-plugin/>
+
+**Community:** see what others are saying, ask questions and share your
+results in the [OMV forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs and model test reports go to
+[GitHub issues](https://github.com/nader-eloshaiker/omv-qnap-plugin/issues).
 
 ## Features
 
@@ -108,9 +112,10 @@ Project website: <https://nader-eloshaiker.github.io/omv-qnap-plugin/>
 - Power recovery after a power failure, EuP mode and the `reboot=efi`
   kernel option (QNAP x86 boxes hang on reboot without it).
 - System page: model, serial number, BIOS, EC firmware, boards, QM2 cards.
-- Driver packages `qnap8528-dkms` and `qm2mod-dkms` in every release,
-  loading at boot from the Drivers page, and one-click kernel headers so
-  DKMS rebuilds the drivers after kernel updates.
+- The drivers come inside the plugin: **Set up drivers** on the Drivers
+  page installs them with everything they need in one click, and is only
+  clickable when something needs doing. Kernel updates rebuild the
+  drivers automatically.
 
 The plugin never talks to the EC from userspace and never runs QNAP
 binaries: all hardware access goes through the open source drivers.
