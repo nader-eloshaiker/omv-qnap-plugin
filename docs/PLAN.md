@@ -543,9 +543,11 @@ user, not just the LED. Options, in order of preference:
 - [ ] Chassis-open event, beeper investigation
 
 ### Phase 4 — Driver integration
-- [ ] Package `qnap8528-dkms` / `qm2mod-dkms` (or vendor DKMS sources) and
-      make the plugin depend/recommend them; install headers automatically
-      (`linux-headers-amd64` or `proxmox-headers-*` for the OMV Proxmox kernel)
+- [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
+      (`drivers/`), released with the plugin, recommended / suggested by it
+      (8.0.2)
+- [ ] Install headers automatically (`linux-headers-amd64` or
+      `proxmox-default-headers` for the OMV Proxmox kernel)
 - [ ] Upstream contributions to qnap8528 if needed (README button table fix,
       buzzer support, EC auto-fan restore)
 
@@ -570,7 +572,7 @@ user, not just the LED. Options, in order of preference:
 | Disk-slot ↔ `/dev/sdX` mapping unknown | Discover via ATA port; config override |
 | QM2 card fan needs a different minimum PWM than the chassis fan | Measure on hardware; per-zone `minpwm` if needed |
 | `smartctl` cost on many-bay units | Separate `diskinterval`, standby-aware; consider `drivetemp` hwmon as an option |
-| qnap8528 not packaged; kernel upgrades need DKMS rebuild | Recommend dkms + headers; Phase 4 packaging |
+| Kernel upgrades need a DKMS rebuild | `*-dkms` packages (AUTOINSTALL); headers must be installed |
 | Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |
 | No buzzer interface | Defer; investigate pcspkr / EC |
 | OMV 8.x workbench changes | Validate the UI after OMV updates (validate-ui runbook) |

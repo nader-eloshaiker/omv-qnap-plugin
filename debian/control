@@ -15,10 +15,12 @@ Depends: openmediavault (>= 8),
          python3 (>= 3.9),
          smartmontools,
          ${misc:Depends}
-Recommends: dkms
+Recommends: qnap8528-dkms
+Suggests: qm2mod-dkms
 Description: OpenMediaVault QNAP hardware plugin
  Fan control, status LED, front panel brightness and power recovery
  settings for QNAP NAS devices (e.g. TS-253D) running openmediavault.
  .
- Requires the open source qnap8528 embedded controller driver
- (https://github.com/0xGiddi/qnap8528) to be installed separately.
+ Needs the open source qnap8528 embedded controller driver
+ (qnap8528-dkms, released alongside this package) and, for QM2 cards,
+ qm2mod-dkms.

@@ -1,0 +1,17 @@
+Source: @NAME@-dkms
+Section: kernel
+Priority: optional
+Maintainer: Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), dh-sequence-dkms
+Standards-Version: 4.7.2
+Homepage: @REPO@
+Rules-Requires-Root: no
+
+Package: @NAME@-dkms
+Architecture: all
+Depends: ${misc:Depends}
+Description: @SUMMARY@
+ @DESCRIPTION@
+ .
+ Upstream @REPO@ v@VERSION@, built for each installed
+ kernel by DKMS (needs the matching kernel headers).

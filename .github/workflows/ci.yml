@@ -26,7 +26,7 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends \
-            git ca-certificates build-essential debhelper fakeroot lintian \
+            git ca-certificates build-essential debhelper dh-dkms fakeroot lintian \
             python3 python3-yaml php-cli >/dev/null
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,6 +68,7 @@ jobs:
       - name: Shell syntax
         run: |
           for f in debian/postinst debian/postrm debian/preinst debian/prerm \
+                   drivers/build.sh drivers/debian/preinst \
                    usr/share/openmediavault/confdb/*/*.sh; do
             [ -e "$f" ] || continue
             sh -n "$f" && echo "$f ok"
@@ -81,6 +82,17 @@ jobs:
           # Release notes: the newest debian/changelog entry.
           awk 'NR > 2 && /^ -- / { exit } NR > 2 { sub(/^  /, ""); print }' \
             debian/changelog > dist/release-notes.md
+
+      - name: Build driver packages
+        run: |
+          drivers/build.sh dist
+          {
+            echo
+            echo "Driver packages (DKMS, from the upstream releases):"
+            for f in dist/*-dkms_*.deb; do
+              echo "- $(dpkg-deb -f "$f" Package) $(dpkg-deb -f "$f" Version)"
+            done
+          } >> dist/release-notes.md
 
       - name: Lintian
         run: lintian --fail-on error dist/*.changes

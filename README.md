@@ -27,28 +27,28 @@ work, because all hardware is discovered at runtime.
 | USB Copy and Reset buttons, USB LED, beeper | 3 |
 | QM2 expansion cards (qnap-qm2): card fan control from its slot and NVMe temperatures | 1 |
 | QM2 slot LEDs (present / error / locate) | 2 |
-| Bundled DKMS drivers (qnap8528, qnap-qm2) | 4 |
+| DKMS driver packages (qnap8528, qnap-qm2) | 2 |
 
 ## Requirements
 
 - OpenMediaVault 8 (Debian 13), tested on a TS-253D. OMV 7 is not
   supported (it would need a separate 7.x release line).
-- The **qnap8528 driver installed** (DKMS):
-
-  ```sh
-  apt install build-essential dkms git linux-headers-$(uname -r)
-  git clone https://github.com/0xGiddi/qnap8528.git && cd qnap8528
-  make install
-  modprobe qnap8528     # add skip_hw_check=true only if dmesg shows the chip ID check failing
-  ```
-
-- For QM2 cards: the [qnap-qm2](https://github.com/0xGiddi/qnap-qm2)
-  driver (`qm2mod`), installed the same way.
+- Headers for the running kernel, so DKMS can build the drivers:
+  `linux-headers-amd64` on the Debian kernel, `proxmox-default-headers`
+  on the Proxmox kernel.
 
 ## Install
 
+Download the .debs from the latest
+[release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases):
+the plugin and the [qnap8528](https://github.com/0xGiddi/qnap8528) driver,
+plus the [qnap-qm2](https://github.com/0xGiddi/qnap-qm2) driver for QM2
+cards. The driver packages are built from upstream releases and replace a
+hand-made `dkms install` of the same driver.
+
 ```sh
-apt install ./openmediavault-qnap_<version>_all.deb
+apt install ./qnap8528-dkms_<version>_all.deb ./qm2mod-dkms_<version>_all.deb \
+            ./openmediavault-qnap_<version>_all.deb
 ```
 
 Then go to **System › QNAP**:

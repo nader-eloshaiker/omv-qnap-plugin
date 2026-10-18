@@ -17,6 +17,10 @@ openmediavault-qnap (8.0.2) stable; urgency=low
   * QM2 Locate blinks red with the timer trigger: the card's own blink
     (qm2mod red 2) leaves the LED dark on the QM2-2P-244A-A1.
   * Locate requests survive a qnapd restart (RuntimeDirectoryPreserve).
+  * Driver packages qnap8528-dkms (1.27) and qm2mod-dkms (1.1), built from
+    pinned upstream commits and attached to the release. They replace a
+    hand-made "dkms install" of the same driver. The plugin recommends
+    qnap8528-dkms and suggests qm2mod-dkms.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sat, 17 Oct 2026 23:41:55 +1100
 

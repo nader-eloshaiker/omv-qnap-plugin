@@ -1,0 +1,9 @@
+# Upstream release packaged as qm2mod-dkms. To update: change VERSION and
+# COMMIT to the new tag, reset REVISION to 1, run make drivers.
+REPO=https://github.com/0xGiddi/qnap-qm2
+VERSION=1.1
+COMMIT=880a920ab1da04415f1d0297cd08fff9144222fd
+REVISION=1
+LICENSE=GPL-2.0
+SUMMARY="QNAP QM2 expansion card driver (DKMS)"
+DESCRIPTION="hwmon fan, PWM and M.2 slot temperatures, and slot LEDs of QNAP QM2 PCIe cards. Used by openmediavault-qnap."

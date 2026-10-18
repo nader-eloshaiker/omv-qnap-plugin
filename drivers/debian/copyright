@@ -1,0 +1,19 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: @NAME@
+Source: @REPO@
+
+Files: *
+Copyright: 0xGiddi
+License: @LICENSE@
+
+Files: debian/*
+Copyright: 2026 Nader Eloshaiker
+License: @LICENSE@
+
+License: @LICENSE@
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; version 2@LATER@.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in "/usr/share/common-licenses/GPL-2".

@@ -5,6 +5,7 @@
 ```sh
 make test          # unit tests (python3 -m unittest), no hardware needed
 make docker-deb    # build dist/openmediavault-qnap_<version>_all.deb in debian:trixie
+make docker-drivers   # build dist/qnap8528-dkms_*.deb, dist/qm2mod-dkms_*.deb
 make deb           # same, on a Debian 13 host with debhelper installed
 make deploy NAS=root@NAS_HOST   # copy dist/*.deb to a NAS and install it (tools/nas-deploy.sh)
 ```
@@ -88,7 +89,9 @@ brings nothing for an `Architecture: all` package. Keep `__pycache__` out of
 4. Tick the items in PLAN.md, commit, push, then
    `git tag v<version> && git push origin v<version>`. CI checks the tag
    matches `debian/changelog`, builds, and publishes the GitHub release
-   with the .deb; the notes are the changelog entry.
+   with the .deb and the driver packages (`qnap8528-dkms`, `qm2mod-dkms`,
+   from `drivers/`; see [dependencies.md](dependencies.md)); the notes are
+   the changelog entry plus the driver versions.
 
 `debian/changelog` is the single source of the version (migrations are
 named after it when the feature is written), so releases are tag-driven

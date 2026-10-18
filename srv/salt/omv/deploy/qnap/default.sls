@@ -18,9 +18,9 @@
 {% set power_recovery = {'off': 0, 'on': 1, 'last': 2} %}
 {% set eup_mode = {'off': 0, 'on': 1} %}
 
-# Kernel module loading. The drivers themselves (qnap8528, and qm2mod for
-# QM2 cards) are installed by the user (DKMS); the plugin only manages how
-# they are loaded.
+# Kernel module loading. The drivers themselves (qnap8528-dkms, and
+# qm2mod-dkms for QM2 cards) are separate packages; the plugin only
+# manages how they are loaded.
 {% set modules = [] %}
 {% if config.loadmodule | to_bool %}{% set _ = modules.append('qnap8528') %}{% endif %}
 {% if config.loadqm2 | to_bool %}{% set _ = modules.append('qm2mod') %}{% endif %}

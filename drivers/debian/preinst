@@ -1,0 +1,20 @@
+#!/bin/sh
+set -e
+
+# The upstream README installs with "dkms install .", which registers the
+# module outside dpkg. Drop such registrations so this package owns it.
+if [ "$1" = install ] || [ "$1" = upgrade ]; then
+    if command -v dkms >/dev/null 2>&1; then
+        for dir in /usr/src/@NAME@-*; do
+            [ -d "$dir" ] || continue
+            dpkg-query -S "$dir" >/dev/null 2>&1 && continue
+            version=${dir#/usr/src/@NAME@-}
+            [ -n "$(dkms status -m @NAME@ -v "$version")" ] || continue
+            echo "Removing hand-installed @NAME@ $version from DKMS"
+            dkms remove -m @NAME@ -v "$version" --all || true
+            rm -rf "$dir"
+        done
+    fi
+fi
+
+#DEBHELPER#
