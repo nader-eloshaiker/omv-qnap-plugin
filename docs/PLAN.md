@@ -342,8 +342,9 @@ qnap8528's `examples/qnap-set-status.sh`.
 - Power button stays with systemd-logind (ACPI). Document
   `HandlePowerKey=` in `/etc/systemd/logind.conf` instead of reimplementing.
 - **Beeper** (optional): QTS uses beeps for start/shutdown/fan failure.
-  qnap8528 exposes no buzzer; investigate `pcspkr` + `beep`, or an EC
-  register (future qnap8528 feature request). Low priority.
+  qnap8528 exposes no buzzer, but the buzzer is the PC-speaker line:
+  `EV_SND`/`SND_TONE` on the `pcspkr` input device beeps on the TS-253D
+  (2026-10-18, [hardware/ts-253d.md](hardware/ts-253d.md)). No EC access.
 
 ## 8. Notifications (Phase 2)
 
@@ -532,7 +533,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] LED walk: ssd/m2ssd discovery, bay → ATA port table, `ident`
 - [ ] Fan sweep per group; Ryzen CPU range; per-group curves (§11)
 - [ ] LCD: probe, then an `Lcd` thread in qnapd (pages, buttons)
-- [ ] Buzzer through pcspkr (test on the TS-253D first)
+- [ ] Buzzer through pcspkr (works on the TS-253D, 2026-10-18)
 
 ### Phase 3 — Buttons & sounds
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
@@ -540,7 +541,8 @@ user, not just the LED. Options, in order of preference:
 - [ ] evdev reader and hold-time detection in qnapd
 - [ ] USB Copy action + USB LED feedback
 - [ ] Reset button actions (safe defaults)
-- [ ] Chassis-open event, beeper investigation
+- [x] Beeper investigation: `pcspkr` input device (TS-253D, 2026-10-18)
+- [ ] Chassis-open event; beeps for start, shutdown, fan failure, USB Copy
 
 ### Phase 4 — Driver integration
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
@@ -574,7 +576,7 @@ user, not just the LED. Options, in order of preference:
 | `smartctl` cost on many-bay units | Separate `diskinterval`, standby-aware; consider `drivetemp` hwmon as an option |
 | Kernel upgrades need a DKMS rebuild | `*-dkms` packages (AUTOINSTALL); headers must be installed |
 | Full-speed fan after disabling the plugin | Documented; optional "speed when stopped" |
-| No buzzer interface | Defer; investigate pcspkr / EC |
+| No buzzer interface in qnap8528 | The buzzer is the PC speaker (`pcspkr`), verified on the TS-253D |
 | OMV 8.x workbench changes | Validate the UI after OMV updates (validate-ui runbook) |
 | Driver load fails on unknown model → UI just says "Not loaded" | Show dmesg hint on the Drivers page (later) |
 
