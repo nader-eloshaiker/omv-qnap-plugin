@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: da6e2ad2-b147-477f-b3d4-84fd040e0ae6
+  permissions:
+    role:
+      - admin
+  title: _("QNAP QM2 fan duty")
+  description: _("QM2 expansion card fan duty cycle.")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 100
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} %"
+    dataConfig:
+      - label: _("Duty")
+        prop: qm2duty
+        backgroundColor: "#5dacdf"

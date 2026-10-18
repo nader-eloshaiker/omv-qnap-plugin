@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: bac88621-9b2c-4a30-8afa-438cf3d37f9c
+  permissions:
+    role:
+      - admin
+  title: _("QNAP fan duty")
+  description: _("Chassis fan duty cycle set by the plugin.")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 100
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} %"
+    dataConfig:
+      - label: _("Duty")
+        prop: fanduty
+        backgroundColor: "#5dacdf"

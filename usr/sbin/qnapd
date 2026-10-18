@@ -1201,6 +1201,23 @@ def pwm_row(name, label, pwm):
             "unit": "%", "value": int(round(pwm * 100.0 / PWM_MAX))}
 
 
+def gauges(rows):
+    """Flat values for the dashboard gauges: chassis and first QM2 fan duty
+    (%), and the hottest temperature per source (None when absent)."""
+    values = dict.fromkeys(("fanduty", "qm2duty") + SOURCES + ("qm2",))
+    for row in rows:
+        value = row["value"]
+        if not isinstance(value, (int, float)):
+            continue
+        if row["type"] == "pwm":
+            key = "fanduty" if row["name"] == "pwm" else "qm2duty"
+            if values[key] is None:
+                values[key] = value
+        elif row["type"] == "temperature" and row["source"] in values:
+            values[row["source"]] = max(value, values[row["source"]] or value)
+    return values
+
+
 def build_status(hw, rows, pwm, mode, reason, faults, running, cards=(),
                  storage=None, slots=()):
     """cards: [(Qm2Card, pwm or None)]; storage: (state, reasons)."""
@@ -1216,6 +1233,7 @@ def build_status(hw, rows, pwm, mode, reason, faults, running, cards=(),
     return {
         "timestamp": time.time(),
         "running": running,
+        "gauges": gauges(fan_rows + pwm_rows + rows),
         "driver": hw.present(),
         "mode": mode,
         "pwm": pwm,

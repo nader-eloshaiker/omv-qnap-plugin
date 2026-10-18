@@ -162,6 +162,17 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 	}
 
 	/**
+	 * Flat values for the dashboard gauges: fanduty, qm2duty (%) and the
+	 * hottest cpu, system, disk, nvme, qm2 temperature (null if absent).
+	 */
+	public function getGauges($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$status = $this->qnapd(["status", "--json"]);
+		return $status['gauges'] ?? new \stdClass();
+	}
+
+	/**
 	 * Drive bays and QM2 slots as qnapd reports them (Disks page).
 	 */
 	public function getSlots($params, $context)

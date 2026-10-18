@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: bdbf8528-d342-4e42-b887-43f2a1ec2cfa
+  permissions:
+    role:
+      - admin
+  title: _("QNAP CPU temperature")
+  description: _("Hottest CPU temperature.")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 100
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} °C"
+    dataConfig:
+      - label: _("CPU")
+        prop: cpu
+        backgroundColor: "#4cd964"

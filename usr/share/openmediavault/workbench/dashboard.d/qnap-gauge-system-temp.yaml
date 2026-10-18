@@ -1,0 +1,27 @@
+version: "1.0"
+type: dashboard-widget
+data:
+  id: a5f7e9ea-ab27-4aa0-b83e-b50062955ae3
+  permissions:
+    role:
+      - admin
+  title: _("QNAP system temperature")
+  description: _("Hottest embedded controller (system) temperature.")
+  type: chart
+  reloadPeriod: 10000
+  chart:
+    type: gauge
+    maxHeight: "150px"
+    min: 0
+    max: 80
+    displayValue: true
+    request:
+      service: Qnap
+      method: getGauges
+    label:
+      formatter: template
+      formatterConfig: "{{ value | tofixed(0) }} °C"
+    dataConfig:
+      - label: _("System")
+        prop: system
+        backgroundColor: "#4cd964"
