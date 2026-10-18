@@ -36,6 +36,7 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setDriverSettings");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
+		$this->registerMethod("getGauges");
 		$this->registerMethod("getSlots");
 		$this->registerMethod("locate");
 	}
