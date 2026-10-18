@@ -1117,7 +1117,8 @@ class Beeper:
     TONE_HZ = 1000
     SHORT, LONG, GAP = 0.5, 1.5, 0.4
     PATTERNS = {
-        "startup": "S", "shutdown": "S", "reset": "S",
+        # No shutdown beep: OMV beeps on the way down itself.
+        "startup": "S", "reset": "S",
         "usbcopy-failed": "SSS",
         "fan-failure": "LLL",
         "storage": "LL",  # degraded, or a rebuild started
@@ -1714,19 +1715,7 @@ class Daemon:
         self.buttons.finish()
         if self.disk_leds:
             self.disk_leds.finish()
-        if system_stopping():
-            self.beeper.beep("shutdown", wait=True)
         return 0
-
-
-def system_stopping():
-    """True while systemd shuts the system down (not a service restart)."""
-    try:
-        state = subprocess.run(["systemctl", "is-system-running"],
-                               capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return state.stdout.strip() == "stopping"
 
 
 def failsafe(service_result=None, qm2=None):
