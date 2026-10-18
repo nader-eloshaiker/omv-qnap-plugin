@@ -10,6 +10,7 @@ the others where they meet.
 | [hardware/fan-control.md](hardware/fan-control.md) | changing the fan curve, presets, hysteresis, floors, failsafe |
 | [hardware/leds.md](hardware/leds.md) | changing the status, disk bay or QM2 slot LEDs |
 | [omv-integration.md](omv-integration.md) | changing the datamodel, RPC, salt states, workbench pages, dashboard widgets or graphs |
+| [disk-sleep.md](disk-sleep.md) | disks don't spin down; checking what may and may not run alongside the plugin |
 | [dependencies.md](dependencies.md) | installing drivers, adding a package or kernel-module dependency |
 | [build-and-release.md](build-and-release.md) | building the .deb, bumping the version, adding a confdb migration, editing postinst/postrm |
 | [testing/hardware-testing.md](testing/hardware-testing.md) | deploying to a NAS and verifying behaviour on real hardware |

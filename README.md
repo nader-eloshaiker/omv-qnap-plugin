@@ -67,6 +67,14 @@ fans go back to the card's own controller on a clean stop (full speed after
 a crash), and you can leave them to the card permanently by unticking
 *Control QM2 expansion card fans*.
 
+### Disks that don't spin down
+
+The plugin never wakes sleeping disks and lets idle ones sleep. Other
+software often doesn't: OMV's S.M.A.R.T. power mode *Never*, the
+`drivetemp` module, other fan or temperature tools. See
+[docs/disk-sleep.md](docs/disk-sleep.md) for what to change and how to
+find what wakes a disk.
+
 ### Reboot hangs
 
 Some QNAP x86 units hang on reboot under Linux. **Power ›
