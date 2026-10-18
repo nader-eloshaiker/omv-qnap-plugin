@@ -49,7 +49,8 @@ wrapped in `try/catch` because `execute()` throws on a non-zero exit.
 The engine module implements `INotification`: *System › Notification ›
 Events* lists "QNAP hardware" (id `qnap`, type Hardware). The salt state
 renders `notify: true` into `/etc/qnapd/qnapd.json` when OMV email is
-enabled and that event is on (on when never saved), and the module
+enabled and that event is ticked (off until saved: the page shows a
+never-saved event as unticked), and the module
 re-applies when either setting changes. qnapd then mails `root`
 (`/usr/sbin/sendmail -t`; OMV's postfix maps root to the notification
 address):

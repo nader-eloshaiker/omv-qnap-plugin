@@ -20,8 +20,10 @@
 {% set notification = salt['omv_conf.get_by_filter'](
   'conf.system.notification.notification',
   {'operator': 'stringEquals', 'arg0': 'id', 'arg1': 'qnap'}) %}
+{# Off until the event is ticked: the Events page shows a never-saved
+   event as unticked, and the daemon must agree with it. #}
 {% set _ = config.update({'notify': (email_config.enable | to_bool) and
-  (notification | length == 0 or notification[0].enable | to_bool)}) %}
+  (notification | length > 0 and notification[0].enable | to_bool)}) %}
 {% set ec_dir = '/sys/devices/platform/qnap8528/ec' %}
 {% set power_recovery = {'off': 0, 'on': 1, 'last': 2} %}
 {% set eup_mode = {'off': 0, 'on': 1} %}
