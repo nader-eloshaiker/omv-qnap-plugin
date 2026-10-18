@@ -44,7 +44,7 @@ on these facts:
 | Finding | Consequence |
 |-|-|
 | qnap8528 exposes **only manual PWM** (`pwmN`, 0–255, no `pwmN_enable`), no way to return the fan to EC auto mode | The plugin **must** run a control loop and must fail safe to full speed |
-| TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`, EC temps `temp1`/`temp6` only. The reference unit (qnap8528 1.24) **passes the IT8528 chip check without `skip_hw_check`** | Keep `skip_hw_check` in the UI as an escape hatch, not a TS-253D requirement |
+| TS-253D: 1 fan (`fan1_input`, `pwm1`), LEDs `status`, `usb`, `panel_brightness`, `hdd1`, `hdd2`, EC temps `temp1`/`temp6` only. The reference unit (qnap8528 1.24 and 1.27) **passes the IT8528 chip check without `skip_hw_check`** | Keep `skip_hw_check` in the UI as an escape hatch, not a TS-253D requirement |
 | hwmon index is not stable (`hwmon3` on one box, `hwmonN` on another) | Always discover devices by `name` |
 | EC temps include junk channels (e.g. `temp11=2°C` on TS-464); "CPU" EC temps may be bogus on x86 | Filter implausible values; use coretemp/k10temp for CPU |
 | Button codes, **verified on the TS-253D**: `BTN_1` = Reset, `BTN_2` = USB Copy (the README is right, a source comment says the opposite); `BTN_0` = chassis open; power button is ACPI | Phase 3 uses the verified mapping; press and release are separate events, so hold time is measured in userspace |
