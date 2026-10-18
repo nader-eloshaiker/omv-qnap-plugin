@@ -14,8 +14,7 @@
 # along with openmediavault-qnap. If not, see <http://www.gnu.org/licenses/>.
 
 {% set config = salt['omv_conf.get']('conf.service.qnap') %}
-# Fault mails: OMV email on and the "qnap" event enabled (enabled when the
-# event has never been saved, as the Notification page shows it).
+# Fault mails: OMV email on and the "qnap" event ticked.
 {% set email_config = salt['omv_conf.get']('conf.system.notification.email') %}
 {% set notification = salt['omv_conf.get_by_filter'](
   'conf.system.notification.notification',
@@ -24,6 +23,24 @@
    event as unticked, and the daemon must agree with it. #}
 {% set _ = config.update({'notify': (email_config.enable | to_bool) and
   (notification | length > 0 and notification[0].enable | to_bool)}) %}
+# Buttons: the script OMV writes for each chosen Scheduled Task, and its
+# user (qnapd runs it; a deleted task means no action).
+{% set scripts_dir = salt['pillar.get']('default:OMV_CRONSCRIPTS_DIR',
+  '/var/lib/openmediavault/cron.d') %}
+{% set script_prefix = salt['pillar.get'](
+  'default:OMV_CRONTAB_USERDEFINED_PREFIX', 'userdefined-') %}
+{% for button in ['usbcopy', 'reset'] %}
+{% set uuid = config.get(button ~ 'task', '') %}
+{% if uuid %}
+{% set jobs = salt['omv_conf.get_by_filter']('conf.system.cron.job',
+  {'operator': 'stringEquals', 'arg0': 'uuid', 'arg1': uuid}) %}
+{% if jobs | length > 0 %}
+{% set _ = config.update({button: {
+  'script': scripts_dir ~ '/' ~ script_prefix ~ uuid,
+  'user': jobs[0].username}}) %}
+{% endif %}
+{% endif %}
+{% endfor %}
 {% set ec_dir = '/sys/devices/platform/qnap8528/ec' %}
 {% set power_recovery = {'off': 0, 'on': 1, 'last': 2} %}
 {% set eup_mode = {'off': 0, 'on': 1} %}

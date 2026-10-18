@@ -1,0 +1,48 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-buttons-form-page
+  type: formPage
+  config:
+    request:
+      service: Qnap
+      get:
+        method: getSettings
+      post:
+        method: setButtonSettings
+    fields:
+      - type: checkbox
+        name: beep
+        label: _("Beep on events")
+        value: false
+        hint: _("QTS patterns through the buzzer. One short beep at startup, at shutdown and when Reset is pressed; three long beeps every 5 minutes while a fan has stopped; two long beeps when a pool becomes degraded, failed or full or starts rebuilding; three short beeps when USB Copy fails.")
+      - type: select
+        name: usbcopytask
+        label: _("USB Copy button runs")
+        value: ""
+        valueField: uuid
+        textField: description
+        store:
+          proxy:
+            service: Qnap
+            get:
+              method: getTasks
+        hint: _("A Scheduled Task (System > Scheduled Tasks), e.g. an rsync from the USB stick to a shared folder. It does not need a schedule of its own. The USB LED blinks while it runs and stays on for 10 seconds when it succeeds.")
+      - type: select
+        name: resettask
+        label: _("Reset button (hold 3 seconds) runs")
+        value: ""
+        valueField: uuid
+        textField: description
+        store:
+          proxy:
+            service: Qnap
+            get:
+              method: getTasks
+        hint: _("Shorter presses and holds of 10 seconds or more do nothing. The plugin never resets OMV itself.")
+    buttons:
+      - template: submit
+      - template: cancel
+        execute:
+          type: url
+          url: "/system/qnap"

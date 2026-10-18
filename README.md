@@ -24,7 +24,7 @@ work, because all hardware is discovered at runtime.
 | Load qnap8528 at boot (with `skip_hw_check`), `reboot=efi` kernel option | 1 |
 | Status page and dashboard widget for fans and temperatures | 1 |
 | RAID-aware status LED, disk LEDs (present/activity/error/locate), LED schedule, notifications | 2 |
-| USB Copy and Reset buttons, USB LED, beeper | 3 |
+| USB Copy and Reset buttons run Scheduled Tasks, USB LED, QTS beeps | 3 |
 | QM2 expansion cards (qnap-qm2): card fan control from its slot and NVMe temperatures | 1 |
 | QM2 slot LEDs (present / error / locate) | 2 |
 | DKMS driver packages (qnap8528, qnap-qm2) | 2 |

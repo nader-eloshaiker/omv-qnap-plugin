@@ -34,6 +34,8 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setFrontPanelSettings");
 		$this->registerMethod("setPowerSettings");
 		$this->registerMethod("setDriverSettings");
+		$this->registerMethod("setButtonSettings");
+		$this->registerMethod("getTasks");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
 		$this->registerMethod("getGauges");
@@ -100,6 +102,45 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
 		$this->validateMethodParams($params, "rpc.qnap.setfrontpanelsettings");
 		return $this->setSubset($params);
+	}
+
+	public function setButtonSettings($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$this->validateMethodParams($params, "rpc.qnap.setbuttonsettings");
+		$uuids = array_column($this->getTasks([], $context), "uuid");
+		foreach (["usbcopytask", "resettask"] as $key) {
+			if (!in_array($params[$key], $uuids, TRUE)) {
+				throw new \OMV\Exception(gettext(
+					"The selected scheduled task no longer exists."));
+			}
+		}
+		return $this->setSubset($params);
+	}
+
+	/**
+	 * Scheduled Tasks a button can run (Buttons page), "None" first.
+	 * qnapd runs the script OMV writes for the task, as the task's user.
+	 */
+	public function getTasks($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$db = \OMV\Config\Database::getInstance();
+		$result = [["uuid" => "", "description" => gettext("None")]];
+		foreach ($db->getByFilter("conf.system.cron.job", [
+				"operator" => "stringEquals", "arg0" => "type",
+				"arg1" => "userdefined"]) as $job) {
+			$text = $job->get("comment") ?: $job->get("command");
+			if (mb_strlen($text) > 60) {
+				$text = mb_substr($text, 0, 57) . "...";
+			}
+			$result[] = [
+				"uuid" => $job->get("uuid"),
+				"description" => sprintf("%s (%s)", $text,
+					$job->get("username"))
+			];
+		}
+		return $result;
 	}
 
 	public function setPowerSettings($params, $context)

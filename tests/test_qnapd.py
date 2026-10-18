@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 import unittest.mock
 
@@ -49,6 +50,7 @@ class FakeSysfs(unittest.TestCase):
         qnapd.KERNEL_LOG_COMMANDS = ()  # Never read the real dmesg.
         qnapd.LOCATE_FILE = os.path.join(self.root, "run", "locate.json")
         qnapd.MOUNTS_FILE = os.path.join(self.root, "mounts")  # None.
+        qnapd.INPUT_DIR = os.path.join(self.root, "input")  # No devices.
         ec = "class/hwmon/hwmon3"
         put(self.root, ec + "/name", "qnap8528")
         put(self.root, ec + "/fan1_input", "1300\n")
@@ -779,6 +781,137 @@ class TestNotifications(FakeSysfs):
         qnapd.failsafe("signal", qm2=False)
         self.assertEqual(len(self.sent), 1)
         self.assertIn("stopped unexpectedly", self.sent[0])
+
+
+class FakeBeeper:
+    def __init__(self):
+        self.beeps = []
+
+    def beep(self, event, wait=False):
+        self.beeps.append(event)
+
+
+TASK = "/var/lib/openmediavault/cron.d/" \
+    "userdefined-32664b22-5a9d-11ec-8834-6f00f75b23ee"
+
+
+class TestButtons(FakeSysfs):
+    def setUp(self):
+        super().setUp()
+        self.ran = []
+        self.result = True
+        self.real_run_task = qnapd.run_task
+        patcher = unittest.mock.patch.object(
+            qnapd, "run_task",
+            lambda task: self.ran.append(task["script"]) or self.result)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        led = "class/leds/qnap8528::usb"
+        put(self.root, led + "/brightness", "0")
+        put(self.root, led + "/trigger", "none")
+        self.usb = led
+        self.beeper = FakeBeeper()
+
+    def buttons(self, **raw):
+        b = qnapd.Buttons(qnapd.Settings(raw), self.beeper)
+        b.DONE_SECONDS = 0
+        return b
+
+    def press(self, b, code, held, start=100.0):
+        b.handle(code, 1, start)
+        action = b.handle(code, 0, start + held)
+        for t in threading.enumerate():
+            if t.name in ("usbcopy", "reset"):
+                t.join(2)
+        return action
+
+    def test_usb_copy_runs_its_task(self):
+        b = self.buttons(usbcopy={"script": TASK, "user": "root"})
+        self.assertEqual(self.press(b, qnapd.BTN_USBCOPY, 0.2), "usbcopy")
+        self.assertEqual(self.ran, [TASK])
+        self.assertEqual(get(self.root, self.usb + "/brightness"), "0")
+        self.assertEqual(self.beeper.beeps, [])
+
+    def test_usb_copy_failure_beeps_three_short(self):
+        self.result = False
+        b = self.buttons(usbcopy={"script": TASK})
+        self.press(b, qnapd.BTN_USBCOPY, 0.2)
+        self.assertEqual(self.beeper.beeps, ["usbcopy-failed"])
+
+    def test_no_task_does_nothing(self):
+        b = self.buttons()
+        self.assertIsNone(self.press(b, qnapd.BTN_USBCOPY, 0.2))
+        self.assertIsNone(self.press(b, qnapd.BTN_RESET, 5))
+        self.assertEqual(self.ran, [])
+
+    def test_reset_needs_a_three_second_hold(self):
+        b = self.buttons(reset={"script": TASK})
+        self.assertIsNone(self.press(b, qnapd.BTN_RESET, 1))
+        self.assertIsNone(self.press(b, qnapd.BTN_RESET, 12))  # reserved
+        self.assertEqual(self.ran, [])
+        self.assertEqual(self.press(b, qnapd.BTN_RESET, 4), "reset")
+        self.assertEqual(self.ran, [TASK])
+        self.assertEqual(self.beeper.beeps, ["reset"])
+
+    def test_chassis_open_mails(self):
+        sent = []
+        with unittest.mock.patch.object(
+                qnapd, "send_mail", lambda s, b: sent.append(s)):
+            b = self.buttons(notify=True)
+            self.assertEqual(b.handle(qnapd.BTN_CHASSIS, 1, 0), "chassis")
+        self.assertIn("chassis opened", sent[0])
+
+    def test_task_settings_validated(self):
+        s = qnapd.Settings({"usbcopy": {"script": TASK, "user": "nas"},
+                            "reset": "rm -rf /"})
+        self.assertEqual(s.usbcopy, {"script": TASK, "user": "nas"})
+        self.assertIsNone(s.reset)
+        self.assertFalse(s.beep)
+
+    def test_run_task_rejects_other_paths(self):
+        self.assertFalse(self.real_run_task({"script": "/bin/true"}))
+        self.assertFalse(self.real_run_task({"script": TASK + "/../x"}))
+
+
+class TestBeeps(FakeSysfs):
+    def test_beeper_writes_pattern_to_pcspkr(self):
+        device = os.path.join(self.root, "input",
+                              "platform-pcspkr-event-spkr")
+        put(self.root, "input/platform-pcspkr-event-spkr", "")
+        b = qnapd.Beeper(True)
+        b.SHORT = b.LONG = b.GAP = 0
+        b.beep("usbcopy-failed", wait=True)
+        with open(device, "rb") as f:
+            data = f.read()
+        events = [qnapd.INPUT_EVENT.unpack_from(data, i)[2:]
+                  for i in range(0, len(data), qnapd.INPUT_EVENT.size)]
+        self.assertEqual(events, [(qnapd.EV_SND, qnapd.SND_TONE, 1000),
+                                  (qnapd.EV_SND, qnapd.SND_TONE, 0)] * 3)
+
+    def test_beeper_off_or_missing_is_silent(self):
+        qnapd.Beeper(False).beep("startup", wait=True)
+        qnapd.Beeper(True).beep("startup", wait=True)  # no pcspkr device
+
+    def test_fan_alarm_repeats_every_five_minutes(self):
+        d = qnapd.Daemon(qnapd.Settings({"beep": True}))
+        d.beeper = FakeBeeper()
+        for now in (0, 10, 290, 300, 310):
+            d.alarms(["fan1 not spinning"], "ok", now)
+        self.assertEqual(d.beeper.beeps, ["fan-failure"] * 2)
+        d.alarms([], "ok", 320)
+        d.alarms(["fan1 not spinning"], "ok", 330)
+        self.assertEqual(len(d.beeper.beeps), 3)
+
+    def test_storage_beeps_on_change_not_at_start(self):
+        d = qnapd.Daemon(qnapd.Settings({"beep": True}))
+        d.beeper = FakeBeeper()
+        d.alarms([], "degraded", 0)  # already degraded when qnapd starts
+        d.alarms([], "degraded", 10)
+        self.assertEqual(d.beeper.beeps, [])
+        d.alarms([], "rebuilding", 20)
+        d.alarms([], "ok", 30)
+        d.alarms([], "fault", 40)
+        self.assertEqual(d.beeper.beeps, ["storage", "storage"])
 
 
 class TestPackaging(unittest.TestCase):

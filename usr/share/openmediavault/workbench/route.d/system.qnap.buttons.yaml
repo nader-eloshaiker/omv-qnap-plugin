@@ -1,0 +1,7 @@
+version: "1.0"
+type: route
+data:
+  url: "/system/qnap/buttons"
+  title: _("Buttons")
+  editing: true
+  component: omv-system-qnap-buttons-form-page
