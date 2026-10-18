@@ -483,18 +483,20 @@ user, not just the LED. Options, in order of preference:
       box's USB boot SSD reports itself non-removable, so qnapd checks the
       sysfs path for a USB controller. No config field. Verified on the
       TS-253D: disk sources are `sda`, `sdb`; `sdc` (USB) is gone.
-- [ ] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
-      and stall point, failsafe, what `fan_default` does
+- [x] QM2 on hardware: discovery, NVMe-on-card mapping, card fan PWM→RPM
+      and stall point, failsafe, what `fan_default` does (TS-253D with a
+      QM2-2P-244A-A1; see hardware/ts-253d.md)
 - [x] Target OMV 8 only, version 8.0.0 (OMV 7 dropped, 2026-10-17)
 - [x] GitHub Actions (2026-10-17): `debian:trixie`, unit tests, `php -l`,
       JSON/YAML/shell syntax, .deb build, lintian, .deb as artifact
 
 ### Phase 2 — QTS-like LEDs & health
-- [ ] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
+- [x] mdstat **and ZFS** (the reference box uses ZFS pools, no mdraid) →
       status LED: degraded = red blink, resilver/rebuild = bicolour, scrub
       = no change; volume full = solid red at `volumefull` % (setting,
       default 95). Unit tests only for degraded/rebuild for now. (8.0.2;
-      implemented 2026-10-18, unit-tested, hardware checks pending)
+      on hardware 2026-10-18: scrub leaves it green, bicolour works on the
+      TS-253D EC)
 - [x] Disk slot mapping + present/error/activity LEDs (7.0.2; bay N = SATA
       port N, verified on a TS-253D by lighting each LED and by reading
       from sda only; health from S.M.A.R.T. + `zpool status -LP` + mdstat)
@@ -504,22 +506,22 @@ user, not just the LED. Options, in order of preference:
       and by reading from nvme0 only (slot 1 blinked). Green blink is the
       kernel timer trigger over the card's I2C; error = S.M.A.R.T. (NVMe
       critical warning) or a faulted ZFS/md member.
-- [ ] Locate action for bays and QM2 slots: *Disks* page (slot table +
+- [x] Locate action for bays and QM2 slots: *Disks* page (slot table +
       Locate toggle). The RPC writes `/run/qnapd/locate.json`; qnapd, the
       only hardware writer, applies it in the LED loop. Runtime state, not
-      config. Turns itself off after 10 minutes. (8.0.2; implemented
-      2026-10-18, unit-tested, hardware checks pending)
-- [ ] LED brightness night schedule (8.0.3; implemented 2026-10-18 on
-      branch feature/night-schedule, unit-tested, hardware check pending)
-- [ ] OMV notifications for faults: fan failure, critical temperature,
-      disk/array fault, daemon failure (8.0.3; implemented 2026-10-18 on
-      branch feature/night-schedule: `INotification` event "QNAP
-      hardware", salt renders `notify`, qnapd mails root; unit-tested,
-      hardware check pending)
-- [ ] Performance graphs via collectd exec reading `/run/qnapd/status.json`
-      (implemented in 894f070; verify on hardware and tick)
-- [ ] confdb migrations: 8.0.2 (`volumefull`), 8.0.3 (night schedule,
-      notifications)
+      config. Turns itself off after 10 minutes. (8.0.2; verified 2026-10-18 on
+      both bays and a QM2 slot, expiry and qnapd restart; QM2 red blinks
+      via the timer trigger)
+- [x] LED brightness night schedule (8.0.3; verified 2026-10-18: a
+      12:17-12:20 window dimmed and restored the panel on time)
+- [x] OMV notifications for faults: fan failure, critical temperature,
+      disk/array fault, daemon failure (8.0.3: `INotification` event "QNAP
+      hardware", off until ticked, salt renders `notify`, qnapd mails root;
+      verified 2026-10-18 with a crash mail)
+- [x] Performance graphs via collectd exec reading `/run/qnapd/status.json`
+      (verified on the TS-253D)
+- [x] confdb migrations: 8.0.2 (`volumefull`), 8.0.3 (night schedule);
+      both ran on the TS-253D
 - [x] Model test protocol (2026-10-17): `tools/model-test.py` (read-only
       report + guided checks at the box), *Model test report* issue form,
       `docs/hardware/models.md`; model PRs must update the docs
@@ -536,7 +538,7 @@ user, not just the LED. Options, in order of preference:
 - [ ] LED walk: ssd/m2ssd discovery, bay → ATA port table, `ident`
 - [ ] Fan sweep per group; Ryzen CPU range; per-group curves (§11)
 - [ ] LCD: probe, then an `Lcd` thread in qnapd (pages, buttons)
-- [ ] Buzzer through pcspkr (works on the TS-253D, 2026-10-18)
+- [ ] Buzzer through pcspkr on the TS-877 (works on the TS-253D)
 
 ### Phase 3 — Buttons & sounds
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
