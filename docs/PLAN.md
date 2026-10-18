@@ -546,11 +546,15 @@ user, not just the LED. Options, in order of preference:
 - [x] Verify key mapping on TS-253D (`tools/hw/button-test.py`: Reset = BTN_1,
       USB Copy = BTN_2)
 - [x] evdev reader and hold-time detection in qnapd (8.0.4, unit-tested)
-- [ ] USB Copy action + USB LED feedback (8.0.4; hardware check pending)
-- [ ] Reset button actions (safe defaults) (8.0.4; hardware check pending)
+- [x] USB Copy action + USB LED feedback (8.0.4; verified on the TS-253D
+      2026-10-18: LED blinks while the task runs, solid then off on
+      success, off plus three short beeps on failure)
+- [x] Reset button actions (safe defaults) (8.0.4; verified: a 1 s press
+      does nothing, a 4 s hold beeps once and runs the task)
 - [x] Beeper investigation: `pcspkr` input device (TS-253D, 2026-10-18)
-- [ ] Chassis-open event; beeps for start, shutdown, fan failure, USB Copy
-      (8.0.4; implemented, hardware check pending)
+- [ ] Chassis-open event; beeps for start, shutdown, fan failure (8.0.4;
+      implemented and unit-tested; boot/shutdown beeps need a reboot to
+      check, chassis open needs the lid off)
 
 ### Phase 4 — Driver integration
 - [x] Package `qnap8528-dkms` / `qm2mod-dkms` from pinned upstream commits
