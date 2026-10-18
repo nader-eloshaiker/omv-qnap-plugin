@@ -119,6 +119,9 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$result['leds'] = implode(", ", $info['leds'] ?? []);
 		$result['rebootefiactive'] = !empty($info['reboot_efi']) ?
 			gettext("Yes") : gettext("No");
+		// Drives the Set up drivers button: clickable only when needed.
+		$result['needssetup'] = empty($info['hwmon']) || $missing ||
+			!empty($outdated) || empty($info['headers']);
 		$result['headersstatus'] = !empty($info['headers']) ?
 			gettext("Ready ✓") :
 			gettext("Missing: click Set up drivers.");

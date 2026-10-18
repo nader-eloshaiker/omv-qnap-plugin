@@ -370,8 +370,9 @@ hardware. One click installs them.
 4. When it's done, **Hardware drivers** and **Driver build files** both
    say **Ready ✓**.
 
-**Do I ever need to click it again?** Only if **Hardware drivers** stops
-saying *Ready ✓*, which normally means you installed a newer version of
+**Do I ever need to click it again?** The button is greyed out while
+everything is ready, so you can't click it by mistake. It becomes
+clickable only if **Hardware drivers** stops saying *Ready ✓*, which normally means you installed a newer version of
 this plugin that brings newer drivers. Updates to OpenMediaVault, Debian
 or other plugins never need it, and when a system update brings a new
 Linux kernel the drivers are rebuilt for it automatically.

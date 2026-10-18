@@ -1,3 +1,11 @@
+openmediavault-qnap (8.0.8) stable; urgency=low
+
+  * Drivers page: Set up drivers can only be clicked when something needs
+    doing (drivers missing, not running, outdated, or build files
+    missing).
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Sun, 18 Oct 2026 15:42:55 +1100
+
 openmediavault-qnap (8.0.7) stable; urgency=low
 
   * Drivers page: says plainly when to click Set up drivers (once after

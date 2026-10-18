@@ -12,8 +12,12 @@ data:
         method: setDriverSettings
     hints:
       - type: info
-        text: _("Click Set up drivers once, right after installing this plugin. After that, only click it again if Hardware drivers below does not say Ready, for example after an update of this plugin that brings newer drivers. OpenMediaVault, Debian and other plugin updates never need it.")
+        text: _("Click Set up drivers once, right after installing this plugin. The button can only be clicked when something needs doing, for example after an update of this plugin that brings newer drivers. OpenMediaVault, Debian and other plugin updates never need it.")
     fields:
+      - type: hidden
+        name: needssetup
+        value: true
+        submitValue: false
       - type: textInput
         name: driverstatus
         label: _("Hardware drivers")
@@ -56,6 +60,10 @@ data:
     buttons:
       - text: _("Set up drivers")
         class: omv-background-color-pair-primary
+        enabledConstraint:
+          operator: truthy
+          arg0:
+            prop: needssetup
         execute:
           type: taskDialog
           taskDialog:
