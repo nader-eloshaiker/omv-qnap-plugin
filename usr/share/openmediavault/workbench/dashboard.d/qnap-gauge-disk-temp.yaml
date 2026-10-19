@@ -20,7 +20,7 @@ data:
       method: getGauges
     label:
       formatter: template
-      formatterConfig: "{{ value | tofixed(0) }} °C"
+      formatterConfig: "{% if value == value %}{{ value | tofixed(0) }} °C{% else %}Disks asleep{% endif %}"
     dataConfig:
       - label: _("Disk")
         prop: disk

@@ -455,6 +455,9 @@ class DiskTemps:
         self.failed = set()
         self.queried = {}   # dev -> (time, I/O count) of the last query
         self.readings = {}  # dev -> last (dev, label, temperature)
+        # Disks found in standby: asked again every poll, since smartctl
+        # -n standby leaves them asleep and they may wake without I/O.
+        self.asleep = set()
 
     def get(self, now):
         if self.last is None or now - self.last >= self.interval:
@@ -482,7 +485,8 @@ class DiskTemps:
             ios = io_count(dev)
             when, last_ios = self.queried.get(dev, (None, None))
             if ios is not None and ios == last_ios and \
-                    now - when < self.IDLE_REFRESH_SECONDS:
+                    now - when < self.IDLE_REFRESH_SECONDS and \
+                    dev not in self.asleep:
                 if dev in self.readings:
                     result.append(self.readings[dev])
                 continue
@@ -497,6 +501,11 @@ class DiskTemps:
             except (OSError, subprocess.SubprocessError, ValueError):
                 continue
             temp, passed = parse_smart(data)
+            # smartctl exits with 2 for a disk in standby.
+            if temp is None and proc.returncode == 2:
+                self.asleep.add(dev)
+            else:
+                self.asleep.discard(dev)
             if temp is not None:
                 self.readings[dev] = (dev, dev, temp)
                 result.append(self.readings[dev])

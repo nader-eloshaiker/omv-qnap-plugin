@@ -562,6 +562,20 @@ class TestDiskLeds(FakeSysfs):
             # Idle past the refresh time and now in standby: no stale reading.
             self.assertEqual(disks.get(qnapd.DiskTemps.IDLE_REFRESH_SECONDS), [])
 
+    def test_disk_waking_without_io_read_again(self):
+        """A disk asleep at its last query is asked again next poll even
+        without I/O; it may have woken through ATA pass-through commands."""
+        replies = iter([(2, {}), (0, {"temperature": {"current": 40}})])
+
+        def smartctl(cmd, **kwargs):
+            code, data = next(replies) if cmd[-1].endswith("sda") else (2, {})
+            return unittest.mock.Mock(returncode=code, stdout=json.dumps(data))
+
+        disks = qnapd.DiskTemps(60)
+        with unittest.mock.patch.object(qnapd.subprocess, "run", smartctl):
+            self.assertEqual(disks.get(0), [])
+            self.assertEqual(disks.get(60), [("sda", "sda", 40.0)])
+
     def test_no_software_blink_on_unverified_models(self):
         """Bays without EC hardware blink would make the kernel blink them
         in software through the EC; stay solid green instead."""

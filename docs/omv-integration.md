@@ -104,7 +104,7 @@ widget; OMV 8 has no generic Diagnostics › Services table).
 | `dashboard.d/qnap.yaml` | fans & temperatures grid |
 | `dashboard.d/qnap-device.yaml` | device datatable |
 | `dashboard.d/qnap-{temperature,fanspeed}-rrd.yaml` | history graphs (`type: rrd`, `kind` = image prefix) |
-| `dashboard.d/qnap-gauge-*.yaml` | round gauges (`type: chart`, `chart.type: gauge`, fixed min/max): fan duty, QM2 fan duty, CPU / system / disk / NVMe temperature, each from `getGauges` |
+| `dashboard.d/qnap-gauge-*.yaml` | round gauges (`type: chart`, `chart.type: gauge`, fixed min/max): fan duty, QM2 fan duty, CPU / system / disk / NVMe temperature, each from `getGauges`; a `null` value arrives as `NaN`, and the template shows "Disks asleep" / "No reading" (`value == value`) |
 | `*/diagnostics.performance-statistics.qnap.yaml`, `component.d/omv-diagnostics-performance-statistics-qnap-rrd-page.yaml` | Performance statistics › QNAP |
 
 UI gotchas seen on OMV 8.5:
