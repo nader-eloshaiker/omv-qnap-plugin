@@ -111,7 +111,8 @@ results in the [OMV forum thread](https://forum.openmediavault.org/index.php?thr
 **Hardware settings and drivers**
 - Power recovery after a power failure, EuP mode and the `reboot=efi`
   kernel option (QNAP x86 boxes hang on reboot without it).
-- System page: model, serial number, BIOS, EC firmware, boards, QM2 cards.
+- System page: model, serial number, BIOS, EC firmware, boards, QM2 cards;
+  processor and memory slots; PCIe and USB devices and the speed they run at.
 - The drivers come inside the plugin: **Set up drivers** on the Drivers
   page installs them with everything they need in one click, and is only
   clickable when something needs doing. Kernel updates rebuild the

@@ -40,6 +40,8 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 		$this->registerMethod("setupDrivers");
 		$this->registerMethod("getStatus");
 		$this->registerMethod("getDevice");
+		$this->registerMethod("getProcessorMemory");
+		$this->registerMethod("getExpansion");
 		$this->registerMethod("getGauges");
 		$this->registerMethod("getSlots");
 		$this->registerMethod("locate");
@@ -403,6 +405,146 @@ class OMVRpcServiceQnap extends \OMV\Rpc\ServiceAbstract
 				"value" => sprintf("%s (S/N %s, PIC %s)", $card['model'] ?? "",
 					$card['serial'] ?? "?", $card['pic_version'] ?? "?")
 			];
+		}
+		return $rows;
+	}
+
+	private static function formatSize($mb)
+	{
+		return $mb >= 1024 ? sprintf(gettext("%s GB"), round($mb / 1024, 1)) :
+			sprintf(gettext("%d MB"), $mb);
+	}
+
+	/**
+	 * System page, Processor & memory tab: rows {property, value}.
+	 */
+	public function getProcessorMemory($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$info = $this->qnapd(["info", "--json"]);
+		$cpu = $info['cpu'] ?? [];
+		$memory = $info['memory'] ?? [];
+		$rows = [];
+		$add = function($property, $value) use (&$rows) {
+			if ($value !== null && $value !== "") {
+				$rows[] = ["property" => $property, "value" => $value];
+			}
+		};
+		$add(gettext("Processor"), $cpu['model'] ?? null);
+		if (!empty($cpu['cores'])) {
+			$add(gettext("Cores"), ($cpu['threads'] ?? 0) > $cpu['cores'] ?
+				sprintf(gettext("%d cores, %d threads"), $cpu['cores'], $cpu['threads']) :
+				sprintf(gettext("%d cores"), $cpu['cores']));
+		}
+		if (!empty($cpu['min_mhz']) && !empty($cpu['max_mhz'])) {
+			$add(gettext("Clock speed"), sprintf(gettext("%s to %s GHz"),
+				round($cpu['min_mhz'] / 1000, 1), round($cpu['max_mhz'] / 1000, 1)));
+		}
+		$modules = $memory['modules'] ?? [];
+		$used = array_filter($modules, function($m) { return !empty($m['size_mb']); });
+		if (!empty($used)) {
+			$add(gettext("Memory"), sprintf(gettext("%s installed, %d of %d slots used"),
+				self::formatSize(array_sum(array_column($used, 'size_mb'))),
+				count($used), max(count($modules), $memory['slots'] ?? 0)));
+		}
+		if (!empty($memory['max_mb'])) {
+			$add(gettext("Maximum memory (BIOS)"), self::formatSize($memory['max_mb']));
+		}
+		if (isset($memory['ecc'])) {
+			$add(gettext("Error correction (ECC)"), $memory['ecc'] ?
+				gettext("Yes") : gettext("No"));
+		}
+		foreach ($modules as $n => $m) {
+			if (empty($m['size_mb'])) {
+				$value = gettext("Empty");
+			} else {
+				$value = implode(" ", array_filter([self::formatSize($m['size_mb']),
+					$m['type'] ?? null, !empty($m['speed']) ?
+					sprintf(gettext("%d MT/s"), $m['speed']) : null]));
+				if (!empty($m['configured_speed']) && !empty($m['speed']) &&
+						$m['configured_speed'] < $m['speed']) {
+					$value .= sprintf(gettext(" (running at %d MT/s)"),
+						$m['configured_speed']);
+				}
+				$maker = implode(" ", array_filter([$m['manufacturer'] ?? null,
+					$m['part'] ?? null]));
+				if ($maker !== "") {
+					$value .= ", " . $maker;
+				}
+			}
+			$add(sprintf(gettext("Memory slot %d"), $n + 1), $value);
+		}
+		return $rows;
+	}
+
+	private static function pcieLink($link)
+	{
+		if (empty($link)) {
+			return "";
+		}
+		$generations = ["2.5" => "1.0", "5" => "2.0", "8" => "3.0",
+			"16" => "4.0", "32" => "5.0", "64" => "6.0"];
+		$gts = (string)(float)$link['gts'];
+		return sprintf("PCIe %s x%d", $generations[$gts] ?? "{$gts} GT/s",
+			$link['width']);
+	}
+
+	/**
+	 * System page, Expansion tab: PCIe and USB devices with their link,
+	 * rows {device, type, link, capable}. "capable" is only filled when
+	 * the device could run faster than it does.
+	 */
+	public function getExpansion($params, $context)
+	{
+		$this->validateMethodContext($context, ["role" => OMV_ROLE_ADMINISTRATOR]);
+		$info = $this->qnapd(["info", "--json"]);
+		$types = [
+			"qm2" => gettext("Expansion card"),
+			"nvme" => gettext("NVMe SSD"),
+			"network" => gettext("Network"),
+			"sata" => gettext("SATA controller"),
+			"sas" => gettext("SAS controller"),
+			"raid" => gettext("RAID controller"),
+			"display" => gettext("Graphics"),
+			"usb" => gettext("USB controller"),
+			"other" => gettext("Other"),
+		];
+		$rows = [];
+		foreach ($info['pci'] ?? [] as $d) {
+			$name = $d['name'] ?? $d['address'];
+			if (!empty($d['slot'])) {
+				$name .= " " . sprintf(gettext("(QM2 slot %d)"), $d['slot']);
+			} elseif (!empty($d['card']) && $d['kind'] !== "qm2") {
+				$name .= " " . gettext("(on the QM2 card)");
+			}
+			if (!empty($d['interface'])) {
+				$name .= " ({$d['interface']})";
+			}
+			$link = self::pcieLink($d['link']);
+			$capable = self::pcieLink($d['max_link'] ?? null);
+			$rows[] = ["device" => $name,
+				"type" => $types[$d['kind']] ?? $types['other'],
+				"link" => $link,
+				"capable" => $capable !== $link ? $capable : ""];
+		}
+		$usbTypes = [
+			"storage" => gettext("USB storage"),
+			"hid" => gettext("USB keyboard, mouse or UPS"),
+			"network" => gettext("USB network"),
+			"audio" => gettext("USB audio"),
+			"camera" => gettext("USB camera"),
+			"printer" => gettext("USB printer"),
+			"wireless" => gettext("USB wireless"),
+			"other" => gettext("USB device"),
+		];
+		foreach ($info['usb'] ?? [] as $d) {
+			$mbps = $d['mbps'] ?? 0;
+			$link = $mbps >= 5000 ? sprintf(gettext("USB 3 (%d Gb/s)"), $mbps / 1000) :
+				($mbps >= 480 ? gettext("USB 2 (480 Mb/s)") :
+				($mbps > 0 ? sprintf(gettext("USB 1 (%d Mb/s)"), $mbps) : ""));
+			$rows[] = ["device" => $d['name'],
+				"type" => $usbTypes[$d['kind']] ?? $usbTypes['other'],
+				"link" => $link, "capable" => ""];
 		}
 		return $rows;
 	}

@@ -1,0 +1,76 @@
+version: "1.0"
+type: component
+data:
+  name: omv-system-qnap-system-tabs-page
+  type: tabsPage
+  config:
+    tabs:
+      - type: datatable
+        label: _("Device")
+        config:
+          autoReload: false
+          hasSearchField: false
+          hasFooter: false
+          selectionType: none
+          limit: 0
+          stateId: 6d2f4a8e-1b7c-4e3a-9f05-8c4d2e6b7a19
+          store:
+            proxy:
+              service: Qnap
+              get:
+                method: getDevice
+          columns:
+            - name: _("Property")
+              prop: property
+              flexGrow: 1
+            - name: _("Value")
+              prop: value
+              flexGrow: 3
+      - type: datatable
+        label: _("Processor & memory")
+        config:
+          autoReload: false
+          hasSearchField: false
+          hasFooter: false
+          selectionType: none
+          limit: 0
+          stateId: 2b9e7c41-5d3a-4f86-8e1c-7a4d9b2f6c03
+          store:
+            proxy:
+              service: Qnap
+              get:
+                method: getProcessorMemory
+          columns:
+            - name: _("Property")
+              prop: property
+              flexGrow: 1
+            - name: _("Value")
+              prop: value
+              flexGrow: 3
+      - type: datatable
+        label: _("Expansion")
+        config:
+          autoReload: false
+          hasSearchField: false
+          hasFooter: false
+          selectionType: none
+          limit: 0
+          stateId: 8f1a3d6b-9c2e-4b75-a0d4-3e6c8b1f5a27
+          store:
+            proxy:
+              service: Qnap
+              get:
+                method: getExpansion
+          columns:
+            - name: _("Device")
+              prop: device
+              flexGrow: 3
+            - name: _("Type")
+              prop: type
+              flexGrow: 1
+            - name: _("Link")
+              prop: link
+              flexGrow: 1
+            - name: _("Capable of")
+              prop: capable
+              flexGrow: 1

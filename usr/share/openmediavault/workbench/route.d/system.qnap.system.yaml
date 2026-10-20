@@ -3,4 +3,4 @@ type: route
 data:
   url: "/system/qnap/system"
   title: _("System")
-  component: omv-system-qnap-system-datatable-page
+  component: omv-system-qnap-system-tabs-page

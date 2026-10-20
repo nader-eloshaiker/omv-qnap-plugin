@@ -37,7 +37,9 @@ Adding a field: follow `.claude/skills/add-setting/SKILL.md`.
 | `getHardwareSettings` | admin | config + `driverstatus`, `leds`, `qm2cards`, `rebootefiactive` (Front panel, Power, Drivers pages) |
 | `getStatus` | admin | rows `{type, kind, source, name, label, value, unit}` with plain labels for display (`friendlyRows`: "Processor", "Bay 1 drive", ...; Status page, fans & temperatures widget). qnapd's own names stay technical, so graphs and config are unaffected |
 | `getGauges` | admin | `{fanduty, qm2duty, cpu, system, disk, nvme, qm2}`: duty % and hottest temperature per source, `null` if absent (gauge widgets) |
-| `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page, device widget) |
+| `getDevice` | admin | rows `{property, value}`: model, serial, BIOS, EC firmware, manufactured, boards, QM2 cards (System page *Device* tab, device widget) |
+| `getProcessorMemory` | admin | rows `{property, value}`: processor, cores, clock range, memory installed / slots / BIOS maximum / ECC, one row per memory slot (System page *Processor & memory* tab) |
+| `getExpansion` | admin | rows `{device, type, link, capable}`: QM2 cards, NVMe SSDs (with QM2 slot), network chips and other PCIe devices with a link, then USB devices; `capable` only when the device could run faster (System page *Expansion* tab) |
 | `getSlots` | admin | bays and QM2 slots `{id, label, device, model, size_gb, state, locate, locate_until}` from the status file (Disks page) |
 | `locate` | admin | `{id, enable}`: starts (10 min) or stops a locate request in `/run/qnapd/locate.json`; rejects ids qnapd does not report |
 | `getHardwareSettings` | admin | config plus read-only page values: `driverstatus`, `headersstatus`, `qm2cards`, `needssetup` (drivers missing / not running / outdated or no headers; drives the *Set up drivers* button's `enabledConstraint`), `leds`, `rebootefiactive` |

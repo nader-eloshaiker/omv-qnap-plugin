@@ -402,7 +402,9 @@ speed within a minute.
    after the next restart.
    ![Power](../images/power.jpg)
 4. **System > QNAP > System** shows your model, BIOS and firmware
-   versions.
+   versions. The *Processor & memory* tab lists each memory slot, handy
+   before a RAM upgrade, and *Expansion* shows cards, M.2 drives and USB
+   devices with the speed they actually run at.
 
 ---
 

@@ -51,6 +51,7 @@ class FakeSysfs(unittest.TestCase):
         qnapd.LOCATE_FILE = os.path.join(self.root, "run", "locate.json")
         qnapd.MOUNTS_FILE = os.path.join(self.root, "mounts")  # None.
         qnapd.INPUT_DIR = os.path.join(self.root, "input")  # No devices.
+        qnapd.CPUINFO_FILE = os.path.join(self.root, "cpuinfo")  # None.
         ec = "class/hwmon/hwmon3"
         put(self.root, ec + "/name", "qnap8528")
         put(self.root, ec + "/fan1_input", "1300\n")
@@ -432,6 +433,121 @@ class TestQm2(FakeQm2):
     def test_failsafe_skips_card_when_disabled(self):
         qnapd.failsafe("signal", qm2=False)
         self.assertEqual(get(self.root, self.qm2 + "/pwm1"), "100")
+
+
+def smbios(kind, data, strings):
+    """One raw SMBIOS structure: header, formatted area, string set."""
+    body = bytes([kind, 4 + len(data), 0, 0]) + bytes(data)
+    return body + b"".join(s.encode() + b"\0" for s in strings) + b"\0"
+
+
+def dimm(size_mb, speed, strings):
+    data = bytearray(0x54 - 4)
+    data[0x0C - 4:0x0E - 4] = size_mb.to_bytes(2, "little")
+    data[0x10 - 4] = 1  # Locator
+    data[0x12 - 4] = 0x1A  # DDR4
+    data[0x15 - 4:0x17 - 4] = speed.to_bytes(2, "little")
+    data[0x17 - 4] = 2 if size_mb else 0  # Manufacturer
+    data[0x1A - 4] = 3 if size_mb else 0  # Part number
+    data[0x20 - 4:0x22 - 4] = speed.to_bytes(2, "little")
+    return smbios(17, data, strings)
+
+
+class TestHardwareInfo(FakeQm2):
+    def put_raw(self, rel, data):
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+
+    def test_cpu(self):
+        put(self.root, "cpuinfo", "".join(
+            "processor\t: %d\\nmodel name\t: Intel(R) Celeron(R) J4125 CPU "
+            "@ 2.00GHz\\nphysical id\t: 0\\ncore id\t\t: %d\\n\\n" % (n, n)
+            for n in range(4)).replace("\\n", "\n"))
+        freq = "devices/system/cpu/cpu0/cpufreq/"
+        put(self.root, freq + "cpuinfo_min_freq", "800000\n")
+        put(self.root, freq + "cpuinfo_max_freq", "2700000\n")
+        self.assertEqual(qnapd.cpu_info(), {
+            "model": "Intel Celeron J4125 CPU @ 2.00GHz", "cores": 4,
+            "threads": 4, "min_mhz": 800, "max_mhz": 2700})
+
+    def test_memory_slots(self):
+        dmi = "firmware/dmi/entries/"
+        # System memory array: 32 GB max (in KB), no ECC, 2 devices.
+        array = bytearray(0x17 - 4)
+        array[1] = 0x03
+        array[2] = 0x03
+        array[3:7] = (32 * 1024 * 1024).to_bytes(4, "little")
+        array[9:11] = (2).to_bytes(2, "little")
+        self.put_raw(dmi + "16-0/raw", smbios(16, array, []))
+        self.put_raw(dmi + "17-0/raw", dimm(16384, 2400, [
+            "A1_DIMM0", "Crucial", "CT16G4SFRA32A.C16F"]))
+        self.put_raw(dmi + "17-1/raw", dimm(0, 0, ["A1_DIMM1"]))
+        self.assertEqual(qnapd.memory_info(), {
+            "max_mb": 32768, "slots": 2, "ecc": False, "modules": [
+                {"slot": "A1_DIMM0", "size_mb": 16384, "type": "DDR4",
+                 "speed": 2400, "configured_speed": 2400,
+                 "manufacturer": "Crucial", "part": "CT16G4SFRA32A.C16F"},
+                {"slot": "A1_DIMM1", "size_mb": 0, "type": None,
+                 "speed": None, "configured_speed": None,
+                 "manufacturer": None, "part": None}]})
+
+    def test_no_dmi(self):
+        self.assertEqual(qnapd.memory_info(), {
+            "max_mb": None, "slots": None, "ecc": None, "modules": []})
+
+    def pci(self, rel, pclass, speed=None, width=None, max_speed=None):
+        put(self.root, rel + "/class", pclass)
+        if speed:
+            for which, value in (("current", speed),
+                                 ("max", max_speed or speed)):
+                put(self.root, rel + "/%s_link_speed" % which,
+                    "%s GT/s PCIe" % value)
+                put(self.root, rel + "/%s_link_width" % which, width)
+        link(self.root, "bus/pci/devices/" + os.path.basename(rel), rel)
+
+    def test_pci_devices(self):
+        root = "devices/pci0000:00/"
+        ssd = self.SWITCH + "/0000:02:01.0/0000:03:00.0"
+        self.pci(root + "0000:00:12.0", "0x010601")  # SATA, chipset
+        self.pci(root + "0000:00:13.0", "0x060400", "5.0", 4)  # Root port
+        self.pci(self.SWITCH, "0x060400", "5.0", 4)
+        self.pci(self.SWITCH + "/0000:02:01.0", "0x060400", "5.0", 4)
+        self.pci(ssd, "0x010802", "5.0", 4, "8.0")
+        put(self.root, ssd + "/nvme/nvme0/model", "Samsung SSD 970 EVO\n")
+        link(self.root, "block/nvme0n1", ssd + "/nvme/nvme0/nvme0n1")
+        nic = root + "0000:00:14.0/0000:05:00.0"
+        self.pci(nic, "0x020000", "5.0", 1)
+        os.makedirs(os.path.join(self.root, nic, "net", "enp5s0"))
+        lspci = ('0000:05:00.0 "Ethernet controller" "Intel Corporation" '
+                 '"Ethernet Controller I225-V" -r03 -p00 "Intel Corporation"'
+                 ' "Device 0000"\n')
+        with unittest.mock.patch.object(qnapd, "command_output",
+                                        lambda cmd: lspci):
+            devices = qnapd.pci_devices(qnapd.Hardware.qm2_cards())
+        self.assertEqual([(d["address"], d["kind"], d["name"], d["card"],
+                           d["slot"], d["interface"]) for d in devices], [
+            ("0000:01:00.0", "qm2", "QM2-2P10G1TB", "QM2-2P10G1TB", None,
+             None),
+            ("0000:03:00.0", "nvme", "Samsung SSD 970 EVO", "QM2-2P10G1TB",
+             1, None),
+            ("0000:05:00.0", "network", "Intel Ethernet Controller I225-V",
+             None, None, "enp5s0")])
+        self.assertEqual(devices[1]["link"], {"gts": 5.0, "width": 4})
+        self.assertEqual(devices[1]["max_link"], {"gts": 8.0, "width": 4})
+
+    def test_usb_devices(self):
+        usb = "bus/usb/devices/"
+        put(self.root, usb + "1-1/bDeviceClass", "09")  # Hub: skipped
+        put(self.root, usb + "2-2/bDeviceClass", "00")
+        put(self.root, usb + "2-2/manufacturer", "Ugreen\n")
+        put(self.root, usb + "2-2/product", "Ugreen Storage Device\n")
+        put(self.root, usb + "2-2/speed", "5000\n")
+        put(self.root, usb + "2-2/2-2:1.0/bInterfaceClass", "08\n")
+        self.assertEqual(qnapd.usb_devices(), [
+            {"name": "Ugreen Storage Device", "kind": "storage",
+             "mbps": 5000}])
 
 
 class TestCollectd(FakeQm2):

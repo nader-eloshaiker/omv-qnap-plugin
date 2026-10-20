@@ -59,6 +59,7 @@ LOCATE_FILE = os.environ.get("QNAPD_LOCATE", "/run/qnapd/locate.json")
 MOUNTS_FILE = "/proc/mounts"
 INPUT_DIR = os.environ.get("QNAPD_INPUT_DIR", "/dev/input/by-path")
 UPTIME_FILE = "/proc/uptime"
+CPUINFO_FILE = "/proc/cpuinfo"
 MODULES_DIR = os.environ.get("QNAPD_MODULES_DIR", "/lib/modules")
 DRIVERS_DIR = os.environ.get("QNAPD_DRIVERS_DIR",
                              "/usr/share/openmediavault-qnap/drivers")
@@ -1927,6 +1928,222 @@ def driver_packages():
     return result
 
 
+def cpu_info():
+    """Processor model, cores, threads and clock range (MHz)."""
+    models, cores, threads = [], {}, 0
+    for line in (read(CPUINFO_FILE) or "").splitlines():
+        key, _, value = (part.strip() for part in line.partition(":"))
+        if key == "processor":
+            threads += 1
+        elif key == "model name":
+            models.append(value)
+        elif key in ("physical id", "core id"):
+            cores.setdefault(key, set()).add(value)
+    cpufreq = sysfs("devices", "system", "cpu", "cpu0", "cpufreq")
+    khz = [read_int(os.path.join(cpufreq, "cpuinfo_%s_freq" % m))
+           for m in ("min", "max")]
+    model = re.sub(r"\((R|TM|tm)\)", "", models[0]) if models else None
+    return {
+        "model": re.sub(r"\s+", " ", model).strip() if model else None,
+        # "cpu cores" is per package; distinct core ids are what count.
+        "cores": (len(cores.get("core id", ())) *
+                  max(1, len(cores.get("physical id", ())))) or threads
+        or None,
+        "threads": threads or None,
+        "min_mhz": khz[0] // 1000 if khz[0] else None,
+        "max_mhz": khz[1] // 1000 if khz[1] else None,
+    }
+
+
+def dmi_entries(kind):
+    """(formatted area, strings) of each SMBIOS structure of a type, from
+    the kernel's copy of the DMI tables (no dmidecode needed)."""
+    entries = []
+    for path in sorted(glob.glob(sysfs("firmware", "dmi", "entries",
+                                       "%d-*" % kind, "raw")),
+                       key=lambda p: int(p.split("-")[-1].split("/")[0])):
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+        except OSError:
+            continue
+        if len(raw) < 4 or raw[0] != kind:
+            continue
+        strings = [s.decode("ascii", "replace").strip()
+                   for s in raw[raw[1]:].split(b"\0")]
+        entries.append((raw[:raw[1]], strings))
+    return entries
+
+
+def dmi_string(entry, offset):
+    data, strings = entry
+    index = data[offset] if offset < len(data) else 0
+    return strings[index - 1] or None if 0 < index <= len(strings) else None
+
+
+def dmi_word(data, offset, size=2):
+    return int.from_bytes(data[offset:offset + size], "little") \
+        if offset + size <= len(data) else None
+
+
+# SMBIOS memory device types (type 17, offset 0x12).
+MEMORY_TYPES = {0x12: "DDR", 0x13: "DDR2", 0x18: "DDR3", 0x1A: "DDR4",
+                0x1B: "LPDDR", 0x1C: "LPDDR2", 0x1D: "LPDDR3",
+                0x1E: "LPDDR4", 0x22: "DDR5", 0x23: "LPDDR5"}
+
+
+def memory_info():
+    """Memory slots from SMBIOS: the system memory array (type 16) and each
+    memory device in it (type 17), empty slots included."""
+    arrays = [data for data, _ in dmi_entries(16)
+              if len(data) >= 0x0F and data[5] == 0x03]  # system memory
+    max_mb, slots, ecc = None, None, None
+    if arrays:
+        data = arrays[0]
+        kb = dmi_word(data, 0x07, 4)
+        if kb == 0x80000000:  # Extended maximum, in bytes.
+            kb = (dmi_word(data, 0x0F, 8) or 0) // 1024
+        max_mb = kb // 1024 if kb else None
+        slots = dmi_word(data, 0x0D) or None
+        ecc = {3: False, 4: True, 5: True, 6: True, 7: True}.get(data[6])
+    modules = []
+    for entry in dmi_entries(17):
+        data = entry[0]
+        if len(data) < 0x15:
+            continue
+        size = dmi_word(data, 0x0C)
+        if size == 0x7FFF:
+            size = dmi_word(data, 0x1C, 4)
+        elif size == 0xFFFF:
+            size = None  # Unknown.
+        elif size and size & 0x8000:
+            size = (size & 0x7FFF) // 1024  # KB granularity.
+        speed = dmi_word(data, 0x15)
+        configured = dmi_word(data, 0x20)
+        modules.append({
+            "slot": dmi_string(entry, 0x10),
+            "size_mb": size,
+            "type": MEMORY_TYPES.get(data[0x12]) if size else None,
+            "speed": speed if size and speed not in (0, 0xFFFF) else None,
+            "configured_speed": configured if size and configured not in
+            (None, 0, 0xFFFF) else None,
+            "manufacturer": dmi_string(entry, 0x17) if size else None,
+            "part": dmi_string(entry, 0x1A) if size else None,
+        })
+    return {"max_mb": max_mb, "slots": slots or len(modules) or None,
+            "ecc": ecc, "modules": modules}
+
+
+# PCI class code prefixes (sysfs "class", 0xCCSSPP) -> kind.
+PCI_KINDS = (("0x0108", "nvme"), ("0x0106", "sata"), ("0x0107", "sas"),
+             ("0x0104", "raid"), ("0x02", "network"), ("0x03", "display"),
+             ("0x0c03", "usb"), ("0x0604", "bridge"))
+VENDOR_SUFFIX = re.compile(r",?\s+(Corporation|Corp\.?|Technology|Inc\.?|"
+                           r"Co\.?,? Ltd\.?|Ltd\.?|Electronics|Semiconductor|"
+                           r"Systems)\b\.?", re.I)
+
+
+def pci_names():
+    """{address: "Vendor Device"} from lspci (pciutils, an OMV dependency),
+    with company suffixes dropped: "Intel Ethernet Controller I225-V"."""
+    names = {}
+    for line in command_output(["lspci", "-mm", "-D"]).splitlines():
+        fields = re.findall(r'"([^"]*)"', line)
+        if len(fields) >= 3:
+            vendor = VENDOR_SUFFIX.sub("", fields[1]).strip()
+            names[line.split()[0]] = ("%s %s" % (vendor, fields[2])).strip()
+    return names
+
+
+def pcie_link(path, which):
+    """{"gts": 5.0, "width": 4} for the current or max PCIe link, or None."""
+    speed = read(os.path.join(path, "%s_link_speed" % which)) or ""
+    width = read_int(os.path.join(path, "%s_link_width" % which))
+    match = re.match(r"([\d.]+) GT/s", speed)
+    if not match or not width:
+        return None
+    return {"gts": float(match.group(1)), "width": width}
+
+
+def pci_devices(cards):
+    """PCIe devices with a link (cards, M.2 drives, network chips), not the
+    bridges and chipset functions in between. A QM2 card is listed as one
+    device (its PCIe switch) with its M.2 drives under it."""
+    names = pci_names()
+    slots = {}  # nvme controller PCI path -> (card, slot number)
+    switches = {}
+    for card in cards:
+        pci = card.pci_path()
+        if not pci:
+            continue
+        switches[pci] = card
+        for number, disk in enumerate(qm2_slot_disks(
+                card, qm2_swapped(card)), 1):
+            if disk:
+                # .../<nvme PCI device>/nvme/nvme0/nvme0n1
+                controller = os.path.realpath(sysfs("block", disk))
+                slots[controller.split(os.sep + "nvme" + os.sep)[0]] = number
+    devices = []
+    for entry in sorted(glob.glob(sysfs("bus", "pci", "devices", "*"))):
+        path = os.path.realpath(entry)
+        address = os.path.basename(entry)
+        current = pcie_link(path, "current")
+        if not current:
+            continue  # Chipset function or empty port.
+        pclass = read(os.path.join(path, "class")) or ""
+        kind = next((k for prefix, k in PCI_KINDS
+                     if pclass.startswith(prefix)), "other")
+        card = switches.get(path)
+        if kind == "bridge" and not card:
+            continue
+        under = next((c for pci, c in switches.items()
+                      if path.startswith(pci + os.sep)), None)
+        device = {"address": address, "kind": "qm2" if card else kind,
+                  "name": names.get(address), "link": current,
+                  "max_link": pcie_link(path, "max"),
+                  "card": (card or under).attr("model") if card or under
+                  else None,
+                  "slot": slots.get(path)}
+        if card:
+            device["name"] = card.attr("model") or device["name"]
+        for model in glob.glob(os.path.join(path, "nvme", "nvme*",
+                                            "model")):
+            device["name"] = read(model) or device["name"]
+        nets = sorted(os.listdir(os.path.join(path, "net"))) \
+            if os.path.isdir(os.path.join(path, "net")) else []
+        device["interface"] = nets[0] if nets else None
+        devices.append(device)
+    return devices
+
+
+USB_KINDS = {"01": "audio", "02": "network", "03": "hid", "06": "camera",
+             "07": "printer", "08": "storage", "0a": "network",
+             "0e": "camera", "e0": "wireless"}
+
+
+def usb_devices():
+    """Devices plugged into the USB ports (hubs left out)."""
+    devices = []
+    for path in sorted(glob.glob(sysfs("bus", "usb", "devices", "*-*"))):
+        if ":" in os.path.basename(path):
+            continue  # An interface, not a device.
+        if read(os.path.join(path, "bDeviceClass")) == "09":
+            continue
+        interface = read(os.path.join(path, os.path.basename(path) +
+                                      ":1.0", "bInterfaceClass"))
+        product = read(os.path.join(path, "product"))
+        vendor = read(os.path.join(path, "manufacturer"))
+        name = product if product and vendor and product.startswith(vendor) \
+            else " ".join(filter(None, (vendor, product)))
+        devices.append({
+            "name": name or "%s:%s" % (read(os.path.join(path, "idVendor")),
+                                       read(os.path.join(path, "idProduct"))),
+            "kind": USB_KINDS.get(interface or "", "other"),
+            "mbps": read_int(os.path.join(path, "speed")),
+        })
+    return devices
+
+
 def cmd_info(args):
     ec_dir = sysfs("devices", "platform", DRIVER)
     dmi = sysfs("class", "dmi", "id")
@@ -1956,6 +2173,10 @@ def cmd_info(args):
                  "pci": card.pci_path(),
                  "leds": [os.path.basename(p) for p in card.leds()]}
                 for card in Hardware.qm2_cards()],
+        "cpu": cpu_info(),
+        "memory": memory_info(),
+        "pci": pci_devices(Hardware.qm2_cards()),
+        "usb": usb_devices(),
     })
     print(json.dumps(info) if args.json else
           "\n".join("%s: %s" % kv for kv in info.items()))

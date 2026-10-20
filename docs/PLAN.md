@@ -375,8 +375,11 @@ user, not just the LED. Options, in order of preference:
     disk LEDs, night schedule).
   - **Power** — power recovery, EuP, `reboot=efi` (+ whether it is active).
   - **Drivers** — qnap8528 / qm2mod status, load at boot, `skip_hw_check`.
-  - **System** — model, serial number, BIOS, EC firmware, manufacture
-    date, board codes, QM2 cards (read-only). The first version had one
+  - **System** — read-only tabs: *Device* (model, serial number, BIOS,
+    EC firmware, manufacture date, board codes, QM2 cards), *Processor &
+    memory* (CPU, memory slots from SMBIOS), *Expansion* (PCIe and USB
+    devices with the link they run at). Tabs keep the extra detail off
+    the dashboard and out of the tile list. The first version had one
     *Hardware* form for the first three; split into tabs on request.
   - *(Phase 2)* **Disks** — slot table with Locate toggle.
   - *(Phase 3)* **Buttons** — button actions.

@@ -1,3 +1,14 @@
+openmediavault-qnap (8.0.10) stable; urgency=low
+
+  * System page: new Processor & memory tab (processor, cores, clock
+    speed, each memory slot with size, type, speed and part number, and
+    the maximum the BIOS reports) and Expansion tab (QM2 cards, M.2
+    drives per QM2 slot, network chips and USB devices, with the link
+    each runs at and what it is capable of). Read from sysfs and the
+    SMBIOS tables, so no disk is woken. The dashboard is unchanged.
+
+ -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Tue, 20 Oct 2026 10:00:00 +1100
+
 openmediavault-qnap (8.0.9) stable; urgency=low
 
   * Disk temperature: a disk found asleep is checked again at the next
