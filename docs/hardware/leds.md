@@ -15,8 +15,8 @@ Code: `StatusLed`, `status_led_state()`, `storage_health()`, `DiskLeds`,
 | `qnap8528::hddN` | 0 off, 1 green, 2 red | hardware via `timer`, 80–140 ms window (we use 100 ms) |
 | `qnap8528::usb` | 0/1 (blue) | hardware, 280–470 ms |
 | `qnap8528::panel_brightness` | 0–100, dims all front LEDs | — |
-| `qm2-<i2c>:green:slotN` | 0 off, 1/2 on | **no** hardware blink: the kernel timer trigger toggles it over the card's I2C |
-| `qm2-<i2c>:red:slotN` | 0 off, 1 on, 2 PIC blink (stays dark on the QM2-2P-244A-A1) | `timer` trigger (software) |
+| `qm2-<i2c>:green:slotN` | 0 off, 1 on, 2 PIC slow blink | `timer` trigger (software, over the card's I2C) |
+| `qm2-<i2c>:red:slotN` | 0 off, 1 on, 2 PIC slow blink | `timer` trigger (software) |
 
 - Set the colour (brightness) **before** the `timer` trigger. Writing
   `trigger=none` stops blinking.
@@ -89,8 +89,8 @@ LED state). *Locate* blinks the slot's LED red for 10 minutes; *Stop
 locating* ends it early. The RPC (`Qnap.locate`) only records the request
 in `/run/qnapd/locate.json` (`{slot id: expiry}`); the disk LED thread
 applies it within 0.25 s, so qnapd stays the only writer of LEDs. Bays:
-brightness 2 + timer; QM2 slots: red 1 + timer (red 2, the PIC blink,
-leaves the LED dark on the QM2-2P-244A-A1). Slot
+brightness 2 + timer; QM2 slots: red 1 + timer, at the same rate as
+activity (the PIC blink, red 2, is slower). Slot
 ids are `bayN` and `<card>-slotN`. Needs *Drive the disk LEDs*.
 
 ## Verifying a mapping on new hardware

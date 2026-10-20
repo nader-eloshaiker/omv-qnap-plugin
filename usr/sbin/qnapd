@@ -887,8 +887,8 @@ class DiskLeds:
                 self.blink(led)
             return
         green, red = leds
-        # qm2mod's red 2 (PIC blink) stays dark on the QM2-2P-244A-A1, so
-        # Locate blinks red 1 with the timer trigger, like activity.
+        # Locate blinks red 1 with the timer trigger, like activity (the
+        # PIC blink, red 2, is slower).
         write(os.path.join(red, "brightness"),
               1 if state in ("error", "locate") else 0)
         write(os.path.join(green, "brightness"),
