@@ -133,9 +133,10 @@ blurred.
 | ![Fan control](docs/images/fan-control.jpg) Fan control | ![Custom fan curve](docs/images/fan-custom.jpg) Custom fan curve |
 | ![Front panel](docs/images/front-panel.jpg) Front panel | ![Disks](docs/images/disks.jpg) Disks |
 | ![Buttons](docs/images/buttons.jpg) Buttons | ![Power](docs/images/power.jpg) Power |
-| ![Drivers](docs/images/drivers.jpg) Drivers | ![System](docs/images/system.jpg) System |
+| ![Drivers](docs/images/drivers.jpg) Drivers | ![Device widget](docs/images/dashboard-device.jpg) Device widget |
+| ![System: processor and memory](docs/images/system-memory.jpg) System › Processor & memory | ![System: expansion](docs/images/system.jpg) System › Expansion |
 | ![Temperature graphs](docs/images/graphs-temperatures.jpg) Temperature graphs | ![Fan speed graphs](docs/images/graphs-fan-speed.jpg) Fan speed graphs |
-| ![Notification events](docs/images/notifications.jpg) Notification events | ![Device widget](docs/images/dashboard-device.jpg) Device widget |
+| ![Notification events](docs/images/notifications.jpg) Notification events | |
 
 <img src="docs/images/navbar.jpg" alt="Navigation" width="180"> Navigation
 
