@@ -7,6 +7,8 @@ description: >-
 url: https://nader-eloshaiker.github.io
 baseurl: /omv-qnap-plugin
 lang: en
+# Preview image for links shared on social sites and chat apps.
+image: /images/banner.png
 theme: jekyll-theme-cayman
 plugins:
   - jekyll-seo-tag

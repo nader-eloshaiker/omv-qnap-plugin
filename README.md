@@ -60,8 +60,11 @@ The [project website](https://nader-eloshaiker.github.io/omv-qnap-plugin/)
 has the same information as a friendly walk-through with screenshots.
 
 **Community:** see what others are saying, ask questions and share your
-results in the [OMV forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs and model test reports go to
+results on [Reddit (r/qnap)](https://www.reddit.com/r/qnap/comments/1xcasqd/openmediavaultqnap_fan_control_leds_and_buttons/) or in the [OMV forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs
+and model test reports go to
 [GitHub issues](https://github.com/nader-eloshaiker/omv-qnap-plugin/issues).
+The story behind it, for QNAP owners thinking about leaving QTS:
+[Run OpenMediaVault on your QNAP NAS](https://medium.com/@nader.eloshaiker/run-openmediavault-on-your-qnap-nas-quiet-fans-working-leds-and-buttons-92e8fa514411) on Medium.
 
 ## Features
 
