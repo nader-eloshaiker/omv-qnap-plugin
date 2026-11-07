@@ -4,6 +4,7 @@ description: >-
   Replace QNAP QTS with OpenMediaVault and keep your hardware working. A free,
   open source OMV plugin for QNAP NAS fan control (no more loud fans), status
   and disk LEDs, buttons, temperature graphs and alerts. Verified on the TS-253D.
+image: /images/banner.png
 ---
 
 # Run OpenMediaVault on your QNAP, with quiet fans and working lights
@@ -114,6 +115,13 @@ affiliated with QNAP.
 ### Where do I get help or report a problem?
 
 Read what other owners are saying, ask questions and share your results
-in the [OpenMediaVault forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs and model test reports go
+on [Reddit (r/qnap)](https://www.reddit.com/r/qnap/comments/1xcasqd/openmediavaultqnap_fan_control_leds_and_buttons/) or in the
+[OpenMediaVault forum thread](https://forum.openmediavault.org/index.php?thread/59641-openmediavault-qnap-fan-control-leds-and-hardware-settings-for-qnap-nas-omv-8-te/). Bugs and model test reports go
 to [GitHub issues](https://github.com/nader-eloshaiker/omv-qnap-plugin/issues).
 Developers can start at the [documentation index](README.md).
+
+### Where can I read more?
+
+The story of why and how it was built, written for QNAP owners thinking
+about leaving QTS: [Run OpenMediaVault on your QNAP NAS: quiet fans,
+working LEDs and buttons](https://medium.com/@nader.eloshaiker/run-openmediavault-on-your-qnap-nas-quiet-fans-working-leds-and-buttons-92e8fa514411) on Medium.
