@@ -103,6 +103,18 @@ class TestHardware(FakeSysfs):
         qnapd.Hardware().set_pwm(400)
         self.assertEqual(get(self.root, self.ec + "/pwm1"), "255")
 
+    def test_pwm_enable_untouched(self):
+        # qnap8528 1.28 adds pwmN_enable next to pwmN; writing a duty to it
+        # (2 = EC automatic) would hand the fans back to the EC.
+        put(self.root, self.ec + "/pwm1_enable", "1")
+        hw = qnapd.Hardware()
+        self.assertEqual(hw.pwm_paths(),
+                         [os.path.join(self.root, self.ec, "pwm1")])
+        hw.set_pwm(2)
+        hw.set_pwm(255)
+        self.assertEqual(get(self.root, self.ec + "/pwm1_enable"), "1")
+        self.assertEqual(hw.read_pwm(), 255)
+
 
 class TestCurve(unittest.TestCase):
     def curve(self, **raw):
