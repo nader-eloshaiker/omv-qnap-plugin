@@ -1,8 +1,8 @@
 # Upstream release packaged as qnap8528-dkms. To update: change VERSION and
 # COMMIT to the new tag, reset REVISION to 1, run make drivers.
 REPO=https://github.com/0xGiddi/qnap8528
-VERSION=1.27
-COMMIT=1358ddcad0de2db5ac17e13f762ddb12519ea527
+VERSION=1.28
+COMMIT=982849c6f51b8fe70571828a4bbd25684bc0eb04
 REVISION=1
 LICENSE=GPL-2.0-or-later
 SUMMARY="QNAP IT8528 embedded controller driver (DKMS)"

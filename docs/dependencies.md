@@ -17,7 +17,7 @@ statistics, for the graphs).
 
 | Driver | Source | Provides | Notes |
 |-|-|-|-|
-| `qnap8528` | <https://github.com/0xGiddi/qnap8528> (GPL-2.0-or-later) | EC hwmon (fans, temps, PWM), LEDs, VPD/EC sysfs, buttons input | Packaged: 1.27. `skip_hw_check=true` only if dmesg shows the chip check failing |
+| `qnap8528` | <https://github.com/0xGiddi/qnap8528> (GPL-2.0-or-later) | EC hwmon (fans, temps, PWM), LEDs, VPD/EC sysfs, buttons input | Packaged: 1.28. `skip_hw_check=true` only if dmesg shows the chip check failing |
 | `qm2mod` | <https://github.com/0xGiddi/qnap-qm2> (GPL-2.0) | QM2 card hwmon (`qm2`), slot LEDs, `model/serial/pic_version/fan_default` | Needs `i2c-algo-bit`. Not for QM2-2S10G1TB02 |
 | `ledtrig-timer` | in-tree | `timer` LED trigger for blinking | A module on Debian/Proxmox kernels; `qnapd.service` loads it |
 | `coretemp` / `k10temp`, `nvme` | in-tree | CPU and NVMe temperatures | |
