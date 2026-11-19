@@ -91,8 +91,11 @@ brings nothing for an `Architecture: all` package. Keep `__pycache__` out of
    matches `debian/changelog`, builds, and publishes the GitHub release
    with the .deb and the driver packages (`qnap8528-dkms`, `qm2mod-dkms`,
    from `drivers/`; see [dependencies.md](dependencies.md)); the notes are
-   the changelog entry plus the driver versions. A last CI job runs the
-   Pages workflow, which rebuilds the apt repository from the new release.
+   the changelog entry plus the driver versions. The release job then
+   starts the Pages workflow on `main`, which rebuilds the apt repository
+   from the new release. Check that
+   `https://nader-eloshaiker.github.io/omv-qnap-plugin/apt/Packages` lists
+   the new version a few minutes later.
 
 `debian/changelog` is the single source of the version (migrations are
 named after it when the feature is written), so releases are tag-driven
@@ -131,10 +134,12 @@ install, by script or by upload, gets updates in Update Management. OMV's
 apt salt state only removes files it names itself, so the source file
 survives `omv-salt deploy run apt`. Don't name it `openmediavault-*`.
 
-Pages runs on pushes to `main` that touch `docs/`, the key or the
-workflow, on demand (`gh workflow run pages.yml`), and from CI after each
-release (a release made with the workflow token triggers no other
-workflow, so CI calls it as a reusable workflow).
+Pages runs on pushes to `main` that touch `docs/`, the key, the source
+file or the workflow, on demand (`gh workflow run pages.yml --ref main`),
+and after each release: a release made with the workflow token triggers
+no other workflow, so the release job starts it with `gh workflow run`.
+Always deploy from `main`: for 8.0.11 a deployment from the tag reported
+success but GitHub Pages kept serving the previous one.
 
 **Signing key**: ed25519, fingerprint
 `9D86 7FB1 E064 1C86 78E1  5D2D ECD0 FBAF F87B 4AA9`, no expiry. The

@@ -3,8 +3,8 @@
 #   https://nader-eloshaiker.github.io/omv-qnap-plugin/          website
 #   https://nader-eloshaiker.github.io/omv-qnap-plugin/install   install script
 #   https://nader-eloshaiker.github.io/omv-qnap-plugin/apt/      apt repository
-# CI calls this after publishing a release (a release made with the
-# workflow token does not trigger other workflows). See
+# CI starts it on main after publishing a release (a release made with
+# the workflow token does not trigger other workflows). See
 # docs/build-and-release.md.
 name: Pages
 
@@ -17,7 +17,6 @@ on:
       - 'etc/apt/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
-  workflow_call:
 
 permissions:
   contents: read
