@@ -112,17 +112,41 @@ publishes three things under <https://nader-eloshaiker.github.io/omv-qnap-plugin
 - the website, built by Jekyll from `docs/` exactly as the old "deploy
   from /docs" setting did;
 - `install`, the one-command installer (`docs/install`), run as
-  `wget -O - …/install | bash`. It checks root, amd64, OMV 8 and a
-  QNAP-looking BIOS (QNAP leaves most DMI fields as "Default string", so
-  `bios_version` like `Q04WAR09` is the hint; `--yes` skips the question),
-  if the installed plugin doesn't ship the repository yet, copies the
-  package's own `omv-qnap.sources` and key (published next to the
-  repository) to the paths the package uses, so apt never sees two
-  entries with different keys (apt refuses that, and OMV's dpkg trigger
-  would fail mid-install), installs `openmediavault-qnap` with
-  `--force-confold`, then runs `Qnap.setupDrivers`
-  through `omv-rpc` (the same job as the Set up drivers button) when
-  `needssetup` is true. CI runs `bash -n` and shellcheck on it;
+  `wget -O - …/install | bash`. The qnap8528 driver is the hardware
+  gate, so the plugin can't end up on a machine it doesn't support:
+  1. checks root, amd64 and OMV 8; a non-QNAP-looking BIOS (QNAP leaves
+     most DMI fields as "Default string", so `bios_version` like
+     `Q04WAR09` is the hint) only prints a warning;
+  2. if the installed plugin doesn't ship the repository yet, copies the
+     package's own `omv-qnap.sources` and key (published next to the
+     repository) to the paths the package uses, so apt never sees two
+     entries with different keys (apt refuses that, and OMV's dpkg
+     trigger would fail mid-install);
+  3. installs the kernel headers (same choice as `header_packages()` in
+     qnapd) and `qnap8528-dkms`/`qm2mod-dkms` from the repository, noting
+     which were not installed before; checks with `modinfo` that the
+     module was built for the running kernel;
+  4. stops qnapd, `modprobe -r qm2mod qnap8528`, plain `modprobe
+     qnap8528` and requires a hwmon device named `qnap8528`. A plain load
+     is safe on any PC: the driver checks the SuperIO chip ID (0x8528)
+     and matches the model from the EC's VPD, and refuses otherwise.
+     Skipped when the driver was already running and the driver
+     packages didn't change, so reruns don't touch the fans;
+  5. on failure: unloads the modules, purges only the packages this run
+     added, removes the repository files if no package owns them,
+     restarts qnapd if it was running and exits non-zero with "nothing
+     was added to OpenMediaVault";
+  6. installs `openmediavault-qnap` with `--force-confold`, sets
+     `enable`, `loadmodule`, `loadqm2` (and `skiphwcheck`) only where
+     they differ, and runs `omv-salt deploy run qnap`.
+
+  `--skip-hw-check` is an explicit opt-in for ENE-controller models
+  (TS-464, TR-464, Qu-X05 and others), never automatic: on a non-QNAP PC
+  it would make the driver poke EC ports 0x68/0x6c on unknown hardware.
+  A stored `skiphwcheck=true` counts as the opt-in on reruns. (The Set up
+  drivers button still falls back to `skip_hw_check=true` by itself; it
+  runs only once the plugin is installed.) `--yes` is accepted and
+  ignored. CI runs `bash -n` and shellcheck on it;
 - `apt/`, a flat, signed apt repository with the `.deb` files of the
   latest GitHub release (`gh release download`), built with
   `apt-ftparchive` and signed (`InRelease`, `Release.gpg`) with the key in

@@ -48,8 +48,9 @@ Already running OpenMediaVault 8 on your QNAP? Log in to it as root
 wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
 ```
 
-It checks that this is a QNAP running OMV 8, installs the plugin, sets
-up the drivers and turns on fan control. Then sign in to the OMV web
+It installs the drivers first and goes on only if the driver recognises
+your QNAP model; on any other machine it removes what it added. Then it
+installs the plugin and turns on fan control. Then sign in to the OMV web
 interface, reload the page, and open **System › QNAP › Status** to watch
 the fans and temperatures. New versions show up in **System › Update
 Management** like any other update.
@@ -178,8 +179,9 @@ blurred.
 The [Quick start](#quick-start) above is all most people need. Either:
 
 - run `wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash` as root (the
-  [script](docs/install) checks for a QNAP on OMV 8, adds the package
-  repository, installs the plugin and runs the driver setup), or
+  [script](docs/install) adds the package repository, installs and loads
+  the drivers, and installs the plugin only if the driver recognises the
+  board), or
 - download `openmediavault-qnap_<version>_all.deb` from the
   [latest release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases/latest),
   **System › Plugins › Upload**, **Install**, then **System › QNAP ›

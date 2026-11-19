@@ -353,15 +353,20 @@ wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
 ```
 
 What it does: `wget` downloads the plugin's install script from the
-project website, and `bash` runs it. The script checks that this is a
-QNAP running OMV 8, adds the plugin's package repository, installs the
-plugin, then installs and starts the drivers and turns on fan control.
+project website, and `bash` runs it. The script checks for OMV 8, adds
+the plugin's package repository, then installs and starts the drivers.
+Only if the driver recognises your QNAP model does it install the plugin
+and turn on fan control.
 This takes **a few minutes**, and the fans run at full speed for a moment
 while the drivers start. When it says **Done**, sign in to the OMV web
 page, reload it, and skip to [7.3 Check and adjust](#73-check-and-adjust).
 
-If the script says your machine *does not look like a QNAP NAS*, answer
-`n` and check that you're logged in to the right machine.
+If the driver doesn't recognise the machine, the script removes what it
+installed, says *nothing was added to OpenMediaVault* and stops. Check
+that you're logged in to the right machine. Some models (TS-464, TR-464,
+Qu-X05 and others with an ENE controller) fail the driver's chip check;
+on one of those, run the command the message shows, which ends in
+`bash -s -- --skip-hw-check`.
 
 ### The web way: upload and install
 
