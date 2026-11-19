@@ -1,0 +1,171 @@
+#!/bin/bash
+#
+# Installs openmediavault-qnap, the OpenMediaVault plugin for QNAP NAS
+# hardware (fans, LEDs, buttons), and sets up its drivers. Run it on the
+# NAS as root:
+#
+#   wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
+#
+# It checks the machine, adds the plugin's package repository (so new
+# versions show up in System > Update Management), installs the plugin
+# and does what the Set up drivers button does. Running it again is safe;
+# it only does what is still needed.
+#
+# Options (add them after "bash -s --", e.g. "| bash -s -- --yes"):
+#   --yes   don't ask before installing on a machine that does not look
+#           like a QNAP NAS
+#
+# https://github.com/nader-eloshaiker/omv-qnap-plugin
+
+set -euo pipefail
+
+SITE="https://nader-eloshaiker.github.io/omv-qnap-plugin"
+REPO="$SITE/apt/"
+SOURCES="/etc/apt/sources.list.d/omv-qnap.sources"
+BOOTSTRAP="/etc/apt/sources.list.d/omv-qnap-install.sources"
+
+yes=false
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) yes=true ;;
+        *) echo "Unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
+
+say() { printf '\n==> %s\n' "$*"; }
+die() { printf '\nError: %s\n' "$*" >&2; exit 1; }
+
+# ------------------------------------------------------------ checks
+
+[ "$(id -u)" -eq 0 ] || die "Run this as root, or with sudo."
+
+arch="$(dpkg --print-architecture)"
+[ "$arch" = amd64 ] || \
+    die "This plugin supports Intel and AMD QNAP models (amd64); this machine is $arch."
+
+omv="$(dpkg-query -W -f='${Version}' openmediavault 2>/dev/null || true)"
+[ -n "$omv" ] || \
+    die "OpenMediaVault is not installed. Install OMV 8 first: $SITE/guide/qts-to-omv.html"
+[ "${omv%%.*}" = 8 ] || \
+    die "This plugin needs OpenMediaVault 8; this machine has $omv."
+
+# QNAP fills most DMI fields with "Default string", so the BIOS version
+# (Q04WAR09 on a TS-253D) is the best hint. The driver makes the final
+# check: it only starts on a model it knows.
+looks_like_qnap() {
+    local dmi=/sys/class/dmi/id field
+    grep -qE '^Q[0-9A-Z]{3}' "$dmi/bios_version" 2>/dev/null && return 0
+    for field in product_name board_name; do
+        grep -qiE '^(TS|TVS|TBS|TDS|TES|TR|HS|QU)-?[0-9]' "$dmi/$field" 2>/dev/null \
+            && return 0
+    done
+    return 1
+}
+
+if looks_like_qnap; then
+    echo "QNAP hardware found (BIOS $(cat /sys/class/dmi/id/bios_version))."
+else
+    echo "This machine does not look like a QNAP NAS" \
+         "(BIOS $(cat /sys/class/dmi/id/bios_version 2>/dev/null || echo unknown))."
+    echo "The plugin only works on QNAP models supported by the qnap8528 driver."
+    if ! $yes; then
+        answer=""
+        read -r -p "Install it anyway? [y/N] " answer < /dev/tty || answer=""
+        case "$answer" in
+            [yY]*) ;;
+            *) die "Stopped. Nothing was changed." ;;
+        esac
+    fi
+fi
+
+# ------------------------------------------------------------ plugin
+
+tmp="$(mktemp -d)"
+cleanup() { rm -rf "$tmp"; rm -f "$BOOTSTRAP"; }
+trap cleanup EXIT
+
+if [ ! -e "$SOURCES" ]; then
+    # Plugin versions before 8.0.11 don't ship the repository. Add it for
+    # this run only; the plugin brings its own copy, and two entries for
+    # the same repository would make apt refuse to run.
+    say "Adding the openmediavault-qnap package repository"
+    wget -q -O "$tmp/omv-qnap.asc" "${REPO}omv-qnap.asc" || \
+        die "Could not download the repository key from $REPO"
+    cat > "$BOOTSTRAP" <<EOF
+Types: deb
+URIs: $REPO
+Suites: ./
+Signed-By: $tmp/omv-qnap.asc
+EOF
+fi
+
+say "Updating the package lists"
+apt-get update
+
+say "Installing openmediavault-qnap (this restarts the OMV web interface)"
+DEBIAN_FRONTEND=noninteractive apt-get install -y openmediavault-qnap
+rm -f "$BOOTSTRAP"
+[ -e "$SOURCES" ] || die "The plugin did not install its package repository."
+echo "Installed openmediavault-qnap $(dpkg-query -W -f='${Version}' openmediavault-qnap)."
+
+# ------------------------------------------------------------ drivers
+
+# The Drivers page and this script use the same steps (Qnap.setupDrivers).
+rpc() { omv-rpc -u admin Qnap "$1" '{}'; }
+
+settings=""
+for _ in $(seq 30); do
+    settings="$(rpc getHardwareSettings 2>/dev/null)" && break
+    settings=""
+    sleep 2
+done
+[ -n "$settings" ] || die "The OMV engine did not answer. Open System > QNAP > Drivers and click Set up drivers."
+
+field() { python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get(sys.argv[2], ""))' "$settings" "$1"; }
+
+if [ "$(field needssetup)" = True ]; then
+    say "Setting up the drivers. This can take a few minutes; the fans run at full speed for a moment."
+    job="$(rpc setupDrivers | python3 -c 'import json, sys; print(json.load(sys.stdin))')"
+    # Show the job's output as it runs and stop when it ends.
+    python3 - "$job" <<'EOF'
+import json, sys, time
+
+status_file, shown = sys.argv[1], 0
+while True:
+    try:
+        with open(status_file) as f:
+            status = json.load(f)
+    except (OSError, ValueError):
+        time.sleep(1)
+        continue
+    output = status.get("outputfilename")
+    if output:
+        try:
+            with open(output, "rb") as f:
+                f.seek(shown)
+                chunk = f.read()
+            shown += len(chunk)
+            sys.stdout.write(chunk.decode("utf-8", "replace"))
+            sys.stdout.flush()
+        except OSError:
+            pass
+    if not status.get("running", True):
+        error = status.get("error")
+        if error:
+            message = error.get("message") if isinstance(error, dict) else error
+            print("\nDriver setup failed: %s" % message, file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
+    time.sleep(2)
+EOF
+    settings="$(rpc getHardwareSettings)"
+else
+    say "The drivers are already set up."
+fi
+
+echo "Drivers: $(field driverstatus)"
+
+say "Done"
+echo "Sign in to the OMV web interface, press Ctrl+Shift+R (Cmd+Shift+R on a Mac)"
+echo "to reload it, then open System > QNAP. Future updates appear in"
+echo "System > Update Management."

@@ -2,3 +2,6 @@
 openmediavault-qnap: dir-or-file-in-srv *
 # Plugin-Section is read by the openmediavault plugin manager.
 openmediavault-qnap: unknown-field Plugin-Section
+# Deliberate: the plugin brings its own signed apt repository so updates
+# appear in OMV's Update Management (docs/build-and-release.md).
+openmediavault-qnap: package-installs-apt-sources [etc/apt/sources.list.d/omv-qnap.sources]

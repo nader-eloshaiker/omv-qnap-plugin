@@ -1,0 +1,89 @@
+# Publishes GitHub Pages: the project website (built from docs/), the
+# install script and a signed apt repository with the latest release:
+#   https://nader-eloshaiker.github.io/omv-qnap-plugin/          website
+#   https://nader-eloshaiker.github.io/omv-qnap-plugin/install   install script
+#   https://nader-eloshaiker.github.io/omv-qnap-plugin/apt/      apt repository
+# CI calls this after publishing a release (a release made with the
+# workflow token does not trigger other workflows). See
+# docs/build-and-release.md.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'usr/share/keyrings/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: apt repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          # Jekyll ran in a container as root.
+          sudo chown -R "$(id -u):$(id -g)" _site
+          mkdir _site/apt
+          gh release download --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.deb' --dir _site/apt
+          cp usr/share/keyrings/omv-qnap.asc _site/apt/
+          cd _site/apt
+          apt-ftparchive packages . > Packages
+          gzip -9 -k Packages
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=openmediavault-qnap \
+            -o APT::FTPArchive::Release::Label=openmediavault-qnap \
+            -o "APT::FTPArchive::Release::Description=openmediavault-qnap plugin and QNAP driver packages" \
+            release . > Release
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --quiet --import
+          gpg --batch --yes --clearsign -o InRelease Release
+          gpg --batch --yes --armor --detach-sign -o Release.gpg Release
+          # Prove the published key verifies what was signed.
+          gpg --dearmor < omv-qnap.asc > "$GNUPGHOME/check.gpg"
+          gpgv --keyring "$GNUPGHOME/check.gpg" InRelease
+          rm -rf "$GNUPGHOME"
+          grep -E '^(Package|Version):' Packages
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

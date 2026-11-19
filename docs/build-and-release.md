@@ -72,7 +72,7 @@ datamodel via `confdb/create.d/conf.service.qnap.sh` instead.
 
 ## Packaging layout
 
-`Architecture: all`; `debian/install` copies `srv/` and `usr/`;
+`Architecture: all`; `debian/install` copies `etc/`, `srv/` and `usr/`;
 `debian/openmediavault-qnap.qnapd.service` is the unit (installed to
 `/usr/lib/systemd/system` on Trixie). `Build-Depends: debhelper-compat
 (= 13)`: stock Trixie's debhelper (13.24) provides up to 13; compat 14,
@@ -91,7 +91,8 @@ brings nothing for an `Architecture: all` package. Keep `__pycache__` out of
    matches `debian/changelog`, builds, and publishes the GitHub release
    with the .deb and the driver packages (`qnap8528-dkms`, `qm2mod-dkms`,
    from `drivers/`; see [dependencies.md](dependencies.md)); the notes are
-   the changelog entry plus the driver versions.
+   the changelog entry plus the driver versions. A last CI job runs the
+   Pages workflow, which rebuilds the apt repository from the new release.
 
 `debian/changelog` is the single source of the version (migrations are
 named after it when the feature is written), so releases are tag-driven
@@ -99,3 +100,42 @@ rather than generated from commit messages.
 
 Commit messages: imperative subject, a body explaining why; no tool
 attribution trailers.
+
+## Install script and apt repository
+
+GitHub Pages (`.github/workflows/pages.yml`, source: GitHub Actions)
+publishes three things under <https://nader-eloshaiker.github.io/omv-qnap-plugin/>:
+
+- the website, built by Jekyll from `docs/` exactly as the old "deploy
+  from /docs" setting did;
+- `install`, the one-command installer (`docs/install`), run as
+  `wget -O - …/install | bash`. It checks root, amd64, OMV 8 and a
+  QNAP-looking BIOS (QNAP leaves most DMI fields as "Default string", so
+  `bios_version` like `Q04WAR09` is the hint; `--yes` skips the question),
+  adds the repository for that run if the installed plugin doesn't ship it
+  yet, installs `openmediavault-qnap`, then runs `Qnap.setupDrivers`
+  through `omv-rpc` (the same job as the Set up drivers button) when
+  `needssetup` is true. CI runs `bash -n` and shellcheck on it;
+- `apt/`, a flat, signed apt repository with the `.deb` files of the
+  latest GitHub release (`gh release download`), built with
+  `apt-ftparchive` and signed (`InRelease`, `Release.gpg`) with the key in
+  the `APT_SIGNING_KEY` Actions secret.
+
+The plugin installs `etc/apt/sources.list.d/omv-qnap.sources` (a
+conffile) and the public key `usr/share/keyrings/omv-qnap.asc`, so every
+install, by script or by upload, gets updates in Update Management. OMV's
+apt salt state only removes files it names itself, so the source file
+survives `omv-salt deploy run apt`. Don't name it `openmediavault-*`.
+
+Pages runs on pushes to `main` that touch `docs/`, the key or the
+workflow, on demand (`gh workflow run pages.yml`), and from CI after each
+release (a release made with the workflow token triggers no other
+workflow, so CI calls it as a reusable workflow).
+
+**Signing key**: ed25519, fingerprint
+`9D86 7FB1 E064 1C86 78E1  5D2D ECD0 FBAF F87B 4AA9`, no expiry. The
+private key is only in the `APT_SIGNING_KEY` secret and in the
+maintainer's offline backup. Losing it means a new key, and every
+install would have to replace `/usr/share/keyrings/omv-qnap.asc` by hand
+before it sees another update, so keep the backup.
+
