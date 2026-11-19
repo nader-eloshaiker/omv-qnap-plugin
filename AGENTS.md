@@ -28,6 +28,9 @@ unsure.
 7. **Hardware actions need the owner's consent** (stalling fans, killing the
    daemon, reboots, EC power settings). Agents never type passwords.
 8. Run `make test` before every build; use `set -o pipefail` when piping it.
+9. **Changes reach `main` only through a pull request.** Work on a branch,
+   open a pull request and let CI pass. Never push to `main` directly; the
+   ruleset refuses it.
 
 ## Commands
 

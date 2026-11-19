@@ -26,6 +26,10 @@ make docker-deb   # build the .deb in Docker (any OS)
   migration ([docs/build-and-release.md](docs/build-and-release.md)).
   Versions are PEP 440: `8.0.N`.
 - Commit messages: an imperative subject, and a body explaining why.
+- `main` is protected: every change reaches it through a pull request
+  from a branch, including the maintainer's, and CI must pass first.
+  Rebase on `main` rather than merging it in; pull requests are squashed
+  or rebased, never merged with a merge commit.
 - Don't include host names, IP addresses or serial numbers in code, docs,
   logs or screenshots.
 
@@ -49,3 +53,8 @@ pull request template lists the steps.
 
 The maintainer adds the `debian/changelog` entry and pushes a `v<version>`
 tag; CI builds the package and publishes the GitHub release.
+
+## Code of conduct
+
+Everyone taking part is expected to follow the
+[code of conduct](CODE_OF_CONDUCT.md).

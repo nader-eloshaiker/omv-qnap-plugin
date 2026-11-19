@@ -274,6 +274,12 @@ Useful on the NAS: `qnapd status`, `qnapd info`, `journalctl -u qnapd -f`.
 
 Not affiliated with QNAP. Use at your own risk.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[code of conduct](CODE_OF_CONDUCT.md). Report security problems privately:
+see [SECURITY.md](SECURITY.md).
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
