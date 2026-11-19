@@ -91,6 +91,10 @@ if [ ! -e "$SOURCES" ]; then
     say "Adding the openmediavault-qnap package repository"
     wget -q -O "$tmp/omv-qnap.asc" "${REPO}omv-qnap.asc" || \
         die "Could not download the repository key from $REPO"
+    # apt checks signatures as the unprivileged _apt user, and mktemp
+    # makes the folder private to root.
+    chmod 755 "$tmp"
+    chmod 644 "$tmp/omv-qnap.asc"
     cat > "$BOOTSTRAP" <<EOF
 Types: deb
 URIs: $REPO
