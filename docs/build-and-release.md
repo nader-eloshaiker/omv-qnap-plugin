@@ -112,8 +112,12 @@ publishes three things under <https://nader-eloshaiker.github.io/omv-qnap-plugin
   `wget -O - …/install | bash`. It checks root, amd64, OMV 8 and a
   QNAP-looking BIOS (QNAP leaves most DMI fields as "Default string", so
   `bios_version` like `Q04WAR09` is the hint; `--yes` skips the question),
-  adds the repository for that run if the installed plugin doesn't ship it
-  yet, installs `openmediavault-qnap`, then runs `Qnap.setupDrivers`
+  if the installed plugin doesn't ship the repository yet, copies the
+  package's own `omv-qnap.sources` and key (published next to the
+  repository) to the paths the package uses, so apt never sees two
+  entries with different keys (apt refuses that, and OMV's dpkg trigger
+  would fail mid-install), installs `openmediavault-qnap` with
+  `--force-confold`, then runs `Qnap.setupDrivers`
   through `omv-rpc` (the same job as the Set up drivers button) when
   `needssetup` is true. CI runs `bash -n` and shellcheck on it;
 - `apt/`, a flat, signed apt repository with the `.deb` files of the

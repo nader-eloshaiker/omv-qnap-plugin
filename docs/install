@@ -22,7 +22,7 @@ set -euo pipefail
 SITE="https://nader-eloshaiker.github.io/omv-qnap-plugin"
 REPO="$SITE/apt/"
 SOURCES="/etc/apt/sources.list.d/omv-qnap.sources"
-BOOTSTRAP="/etc/apt/sources.list.d/omv-qnap-install.sources"
+KEYRING="/usr/share/keyrings/omv-qnap.asc"
 
 yes=false
 for arg in "$@"; do
@@ -80,42 +80,51 @@ fi
 
 # ------------------------------------------------------------ plugin
 
-tmp="$(mktemp -d)"
-cleanup() { rm -rf "$tmp"; rm -f "$BOOTSTRAP"; }
+# Plugin versions before 8.0.11 don't ship the repository. Put the
+# plugin's own source file and key where the package keeps them, so apt
+# sees exactly one entry before, during and after the install (two
+# entries with different keys make apt refuse to run). The package then
+# takes both files over.
+added=false
+cleanup() {
+    # Take the repository away again if the plugin did not take it over.
+    if $added && ! dpkg -S "$SOURCES" >/dev/null 2>&1; then
+        rm -f "$SOURCES" "$KEYRING"
+    fi
+}
 trap cleanup EXIT
 
 if [ ! -e "$SOURCES" ]; then
-    # Plugin versions before 8.0.11 don't ship the repository. Add it for
-    # this run only; the plugin brings its own copy, and two entries for
-    # the same repository would make apt refuse to run.
     say "Adding the openmediavault-qnap package repository"
-    wget -q -O "$tmp/omv-qnap.asc" "${REPO}omv-qnap.asc" || \
-        die "Could not download the repository key from $REPO"
-    # apt checks signatures as the unprivileged _apt user, and mktemp
-    # makes the folder private to root.
-    chmod 755 "$tmp"
-    chmod 644 "$tmp/omv-qnap.asc"
-    cat > "$BOOTSTRAP" <<EOF
-Types: deb
-URIs: $REPO
-Suites: ./
-Signed-By: $tmp/omv-qnap.asc
-EOF
+    tmp="$(mktemp -d)"
+    if ! wget -q -O "$tmp/omv-qnap.asc" "${REPO}omv-qnap.asc" ||
+       ! wget -q -O "$tmp/omv-qnap.sources" "${REPO}omv-qnap.sources"; then
+        rm -rf "$tmp"
+        die "Could not download the repository files from $REPO"
+    fi
+    install -m 644 "$tmp/omv-qnap.asc" "$KEYRING"
+    install -m 644 "$tmp/omv-qnap.sources" "$SOURCES"
+    rm -rf "$tmp"
+    added=true
 fi
 
+# Nothing below may read the keyboard: when piped into bash, standard
+# input is the rest of this script.
 say "Updating the package lists"
-apt-get update
+apt-get update < /dev/null
 
 say "Installing openmediavault-qnap (this restarts the OMV web interface)"
-DEBIAN_FRONTEND=noninteractive apt-get install -y openmediavault-qnap
-rm -f "$BOOTSTRAP"
-[ -e "$SOURCES" ] || die "The plugin did not install its package repository."
+DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+    openmediavault-qnap < /dev/null
+dpkg -S "$SOURCES" >/dev/null 2>&1 || \
+    die "The plugin did not install its package repository."
 echo "Installed openmediavault-qnap $(dpkg-query -W -f='${Version}' openmediavault-qnap)."
 
 # ------------------------------------------------------------ drivers
 
 # The Drivers page and this script use the same steps (Qnap.setupDrivers).
-rpc() { omv-rpc -u admin Qnap "$1" '{}'; }
+rpc() { omv-rpc -u admin Qnap "$1" '{}' < /dev/null; }
 
 settings=""
 for _ in $(seq 30); do
