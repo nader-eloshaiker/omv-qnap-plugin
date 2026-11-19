@@ -1,0 +1,7 @@
+# openmediavault-qnap updates, so new versions of the plugin and its
+# drivers show up in System > Update Management.
+# https://github.com/nader-eloshaiker/omv-qnap-plugin
+Types: deb
+URIs: https://nader-eloshaiker.github.io/omv-qnap-plugin/apt/
+Suites: ./
+Signed-By: /usr/share/keyrings/omv-qnap.asc

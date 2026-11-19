@@ -585,8 +585,14 @@ user, not just the LED. Options, in order of preference:
 - [x] Forum thread linked from the README, site and guide
 
 ### After feature complete
-- [ ] Get into omv-extras so it installs from the Plugins list (ask the
-      omv-extras maintainer once a few more models are confirmed)
+- [x] Easy install and updates without omv-extras (8.0.11): the
+      omv-extras maintainer keeps hardware-specific plugins out of its
+      repository (omv-extras issue #95, 2026-11-17) and suggested an
+      install script like omv-extras' own. Done: `docs/install` (one
+      command, checks for a QNAP on OMV 8, sets up the drivers) and a
+      signed apt repository on GitHub Pages that the plugin adds, so
+      updates show in Update Management. See build-and-release.md.
+- [x] qnap8528 1.28 packaged (8.0.11); qnapd ignores the new `pwmN_enable`
 - [ ] TS-877 support (section above)
 - [ ] Reports from other models (`tools/model-test.py`, issue form)
 - [ ] Upstream contributions to qnap8528 (README button table fix, export

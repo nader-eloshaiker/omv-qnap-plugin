@@ -5,6 +5,13 @@ openmediavault-qnap (8.0.11) stable; urgency=low
     pwmN_enable file. The plugin keeps controlling the fans itself and
     never hands them back to the EC; a stopped plugin still means full
     speed.
+  * Updates through OMV: the plugin adds its own signed package
+    repository, so new versions of the plugin and its drivers appear in
+    System > Update Management.
+  * One-command install for people who prefer it:
+    wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
+    checks that the machine is a QNAP running OMV 8, installs the plugin
+    and sets up the drivers.
 
  -- Nader Eloshaiker <1904325+nader-eloshaiker@users.noreply.github.com>  Tue, 17 Nov 2026 19:07:55 +1100
 

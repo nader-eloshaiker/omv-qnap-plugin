@@ -58,6 +58,19 @@ You need OpenMediaVault 8 already installed on your QNAP. If you are still
 on QTS, start with the guide:
 **[Moving from QNAP QTS to OpenMediaVault](guide/qts-to-omv.md)**.
 
+**One command.** Log in to the NAS as root (at its keyboard, or with
+`ssh root@NAS_ADDRESS` from your computer) and run:
+
+```sh
+wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
+```
+
+It checks that this is a QNAP running OMV 8, installs the plugin, sets up
+the drivers and turns on fan control. Then reload the OMV web page and
+open **System › QNAP › Status** to listen to your NAS go quiet.
+
+**Or with the web interface only:**
+
 1. Download **one file**, `openmediavault-qnap_<version>_all.deb`, from the
    [latest release](https://github.com/nader-eloshaiker/omv-qnap-plugin/releases/latest).
 2. In the OMV web interface open **System › Plugins**, click **Upload**,
@@ -65,6 +78,8 @@ on QTS, start with the guide:
 3. Open **System › QNAP › Drivers** and click **Set up drivers**. It
    installs the drivers and everything they need, and turns on fan control.
 4. Open **System › QNAP › Status** and listen to your NAS go quiet.
+
+Updates arrive in **System › Update Management** like any other update.
 
 ## Questions
 
@@ -93,7 +108,8 @@ QNAP's own programs.
 
 ### Do I need Linux skills?
 
-Not for the plugin: you install and set it up in the OMV web interface.
+Not for the plugin: you install it with one copy-and-paste command, or
+entirely in the OMV web interface, and you set it up in the web interface.
 Installing OpenMediaVault itself takes a USB stick, a keyboard and a
 screen (or some patience). The
 [guide](guide/qts-to-omv.md) walks you through it.

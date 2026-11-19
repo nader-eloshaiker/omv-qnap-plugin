@@ -340,6 +340,33 @@ The omv-extras documentation lives at
 
 ## 7. Install the QNAP plugin
 
+There are two ways. Both end in the same place, and both make later
+updates of the plugin appear in **System > Update Management**.
+
+### The quick way: one command
+
+Log in to the NAS as `root`, at its keyboard or over SSH (see
+[step 6](#the-official-way-one-command) for how), and run:
+
+```sh
+wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
+```
+
+What it does: `wget` downloads the plugin's install script from the
+project website, and `bash` runs it. The script checks that this is a
+QNAP running OMV 8, adds the plugin's package repository, installs the
+plugin, then installs and starts the drivers and turns on fan control.
+This takes **a few minutes**, and the fans run at full speed for a moment
+while the drivers start. When it says **Done**, sign in to the OMV web
+page, reload it, and skip to [7.3 Check and adjust](#73-check-and-adjust).
+
+If the script says your machine *does not look like a QNAP NAS*, answer
+`n` and check that you're logged in to the right machine.
+
+### The web way: upload and install
+
+If you'd rather not use a command line, do 7.1 and 7.2 in the web page.
+
 ### 7.1 Upload and install
 
 1. On your other computer, open the plugin's
@@ -372,8 +399,9 @@ hardware. One click installs them.
 
 **Do I ever need to click it again?** The button is greyed out while
 everything is ready, so you can't click it by mistake. It becomes
-clickable only if **Hardware drivers** stops saying *Ready ✓*, which normally means you installed a newer version of
-this plugin that brings newer drivers. Updates to OpenMediaVault, Debian
+clickable only if **Hardware drivers** stops saying *Ready ✓*, which
+normally means an update of this plugin (from **System > Update
+Management**) brought newer drivers. Updates to OpenMediaVault, Debian
 or other plugins never need it, and when a system update brings a new
 Linux kernel the drivers are rebuilt for it automatically.
 
