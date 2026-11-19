@@ -65,8 +65,9 @@ on QTS, start with the guide:
 wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
 ```
 
-It checks that this is a QNAP running OMV 8, installs the plugin, sets up
-the drivers and turns on fan control. Then reload the OMV web page and
+It installs the drivers first and goes on only if the driver recognises
+your QNAP model; on any other machine it removes what it added. Then it
+installs the plugin and turns on fan control. Then reload the OMV web page and
 open **System › QNAP › Status** to listen to your NAS go quiet.
 
 **Or with the web interface only:**

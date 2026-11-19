@@ -6,52 +6,73 @@
 #
 #   wget -O - https://nader-eloshaiker.github.io/omv-qnap-plugin/install | bash
 #
-# It checks the machine, adds the plugin's package repository (so new
-# versions show up in System > Update Management), installs the plugin
-# and does what the Set up drivers button does. Running it again is safe;
-# it only does what is still needed.
+# The qnap8528 driver decides whether this machine is supported: the
+# script installs and loads the drivers first, and only if the driver
+# recognises the board does it install the plugin. On any other machine
+# it removes what it added and stops, so nothing is added to
+# OpenMediaVault.
 #
-# Options (add them after "bash -s --", e.g. "| bash -s -- --yes"):
-#   --yes   don't ask before installing on a machine that does not look
-#           like a QNAP NAS
+# It also adds the plugin's package repository, so new versions show up
+# in System > Update Management. Running it again is safe; it only does
+# what is still needed.
+#
+# Options (add them after "bash -s --", e.g. "| bash -s -- --skip-hw-check"):
+#   --skip-hw-check  only for QNAP models with an ENE controller (TS-464,
+#                    TS-464EU, TR-464, TS-453D, Qu-X05 and others), whose
+#                    chip check fails
 #
 # https://github.com/nader-eloshaiker/omv-qnap-plugin
 
-set -euo pipefail
+# Everything runs from main() at the bottom, so bash reads the whole file
+# before doing anything: a cut-off download can't run half a script.
 
 SITE="https://nader-eloshaiker.github.io/omv-qnap-plugin"
 REPO="$SITE/apt/"
 SOURCES="/etc/apt/sources.list.d/omv-qnap.sources"
 KEYRING="/usr/share/keyrings/omv-qnap.asc"
+ISSUES="https://github.com/nader-eloshaiker/omv-qnap-plugin/issues"
+DRIVERS=(qnap8528-dkms qm2mod-dkms)
+ENE_MODELS="TS-464, TS-464EU, TR-464, TS-453D, Qu-X05 and others"
 
-yes=false
-for arg in "$@"; do
-    case "$arg" in
-        -y|--yes) yes=true ;;
-        *) echo "Unknown option: $arg" >&2; exit 2 ;;
-    esac
-done
+say()  { printf '\n==> %s\n' "$*"; }
+warn() { printf 'Warning: %s\n' "$*" >&2; }
+die()  { printf '\nError: %s\n' "$*" >&2; exit 1; }
 
-say() { printf '\n==> %s\n' "$*"; }
-die() { printf '\nError: %s\n' "$*" >&2; exit 1; }
+# Nothing may read the keyboard: when piped into bash, standard input is
+# the rest of this script.
+apt_get() {
+    DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 "$@" < /dev/null
+}
 
-# ------------------------------------------------------------ checks
+installed() {
+    dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null | grep -q '^ii'
+}
 
-[ "$(id -u)" -eq 0 ] || die "Run this as root, or with sudo."
+version() {
+    dpkg-query -W -f='${Version}' "$1" 2>/dev/null || true
+}
 
-arch="$(dpkg --print-architecture)"
-[ "$arch" = amd64 ] || \
-    die "This plugin supports Intel and AMD QNAP models (amd64); this machine is $arch."
+hwmon_present() {
+    grep -qsx "$1" /sys/class/hwmon/hwmon*/name
+}
 
-omv="$(dpkg-query -W -f='${Version}' openmediavault 2>/dev/null || true)"
-[ -n "$omv" ] || \
-    die "OpenMediaVault is not installed. Install OMV 8 first: $SITE/guide/qts-to-omv.html"
-[ "${omv%%.*}" = 8 ] || \
-    die "This plugin needs OpenMediaVault 8; this machine has $omv."
+# Same choice as header_packages() in qnapd: this kernel's headers plus
+# the metapackage that brings them for later kernels, so DKMS can rebuild.
+header_packages() {
+    local release flavour
+    release="$(uname -r)"
+    if [[ $release =~ ^([0-9]+)\.([0-9]+)\..*-pve$ ]]; then
+        echo "proxmox-headers-$release proxmox-headers-${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+    else
+        flavour="${release#*-}"
+        flavour="$(sed -E 's/^[0-9]+-//' <<< "$flavour")"
+        echo "linux-headers-$release linux-headers-$flavour"
+    fi
+}
 
 # QNAP fills most DMI fields with "Default string", so the BIOS version
-# (Q04WAR09 on a TS-253D) is the best hint. The driver makes the final
-# check: it only starts on a model it knows.
+# (Q04WAR09 on a TS-253D) is the best hint. This is only an early
+# warning; the driver makes the real check.
 looks_like_qnap() {
     local dmi=/sys/class/dmi/id field
     grep -qE '^Q[0-9A-Z]{3}' "$dmi/bios_version" 2>/dev/null && return 0
@@ -62,40 +83,44 @@ looks_like_qnap() {
     return 1
 }
 
-if looks_like_qnap; then
-    echo "QNAP hardware found (BIOS $(cat /sys/class/dmi/id/bios_version))."
-else
-    echo "This machine does not look like a QNAP NAS" \
-         "(BIOS $(cat /sys/class/dmi/id/bios_version 2>/dev/null || echo unknown))."
-    echo "The plugin only works on QNAP models supported by the qnap8528 driver."
-    if ! $yes; then
-        answer=""
-        read -r -p "Install it anyway? [y/N] " answer < /dev/tty || answer=""
-        case "$answer" in
-            [yY]*) ;;
-            *) die "Stopped. Nothing was changed." ;;
-        esac
-    fi
-fi
+checks() {
+    [ "$(id -u)" -eq 0 ] || die "Run this as root, or with sudo."
 
-# ------------------------------------------------------------ plugin
+    local arch omv
+    arch="$(dpkg --print-architecture)"
+    [ "$arch" = amd64 ] || \
+        die "This plugin supports Intel and AMD QNAP models (amd64); this machine is $arch."
+
+    omv="$(version openmediavault)"
+    [ -n "$omv" ] || \
+        die "OpenMediaVault is not installed. Install OMV 8 first: $SITE/guide/qts-to-omv.html"
+    [ "${omv%%.*}" = 8 ] || \
+        die "This plugin needs OpenMediaVault 8; this machine has $omv."
+
+    local tool
+    for tool in wget python3 modprobe; do
+        command -v "$tool" > /dev/null || die "$tool is missing."
+    done
+
+    if looks_like_qnap; then
+        echo "QNAP hardware found (BIOS $(cat /sys/class/dmi/id/bios_version))."
+    else
+        echo "This machine does not look like a QNAP NAS" \
+             "(BIOS $(cat /sys/class/dmi/id/bios_version 2>/dev/null || echo unknown))."
+        echo "The qnap8528 driver will check; if it doesn't recognise the board, this"
+        echo "script removes what it added and stops."
+    fi
+}
 
 # Plugin versions before 8.0.11 don't ship the repository. Put the
 # plugin's own source file and key where the package keeps them, so apt
 # sees exactly one entry before, during and after the install (two
 # entries with different keys make apt refuse to run). The package then
 # takes both files over.
-added=false
-cleanup() {
-    # Take the repository away again if the plugin did not take it over.
-    if $added && ! dpkg -S "$SOURCES" >/dev/null 2>&1; then
-        rm -f "$SOURCES" "$KEYRING"
-    fi
-}
-trap cleanup EXIT
-
-if [ ! -e "$SOURCES" ]; then
+add_repository() {
+    [ -e "$SOURCES" ] && return 0
     say "Adding the openmediavault-qnap package repository"
+    local tmp
     tmp="$(mktemp -d)"
     if ! wget -q -O "$tmp/omv-qnap.asc" "${REPO}omv-qnap.asc" ||
        ! wget -q -O "$tmp/omv-qnap.sources" "${REPO}omv-qnap.sources"; then
@@ -105,80 +130,206 @@ if [ ! -e "$SOURCES" ]; then
     install -m 644 "$tmp/omv-qnap.asc" "$KEYRING"
     install -m 644 "$tmp/omv-qnap.sources" "$SOURCES"
     rm -rf "$tmp"
-    added=true
-fi
+    ADDED_REPO=true
+}
 
-# Nothing below may read the keyboard: when piped into bash, standard
-# input is the rest of this script.
-say "Updating the package lists"
-apt-get update < /dev/null
+# Runs on every exit: take the repository away again if the plugin did
+# not take it over (it wasn't installed, or the hardware isn't supported).
+cleanup() {
+    if $ADDED_REPO && ! dpkg -S "$SOURCES" > /dev/null 2>&1; then
+        rm -f "$SOURCES" "$KEYRING"
+        apt-get update -qq < /dev/null > /dev/null 2>&1 || true
+    fi
+}
 
-say "Installing openmediavault-qnap (this restarts the OMV web interface)"
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-    openmediavault-qnap < /dev/null
-dpkg -S "$SOURCES" >/dev/null 2>&1 || \
-    die "The plugin did not install its package repository."
-echo "Installed openmediavault-qnap $(dpkg-query -W -f='${Version}' openmediavault-qnap)."
+start_qnapd_again() {
+    if $QNAPD_WAS_ACTIVE && ! systemctl is-active --quiet qnapd; then
+        systemctl start qnapd || true
+    fi
+}
 
-# ------------------------------------------------------------ drivers
+# Undo what this run added when the drivers don't work on this machine.
+rollback() {
+    modprobe -r qm2mod 2> /dev/null || true
+    modprobe -r qnap8528 2> /dev/null || true
+    if [ ${#ADDED_PACKAGES[@]} -gt 0 ]; then
+        say "Removing what this script installed: ${ADDED_PACKAGES[*]}"
+        apt_get --yes purge "${ADDED_PACKAGES[@]}" || true
+        echo "The build tools that came with them stay; 'apt autoremove' removes them."
+    fi
+    start_qnapd_again
+}
 
-# The Drivers page and this script use the same steps (Qnap.setupDrivers).
-rpc() { omv-rpc -u admin Qnap "$1" '{}' < /dev/null; }
+# Prints true when the stored settings ask for skip_hw_check.
+configured_skip() {
+    installed openmediavault-qnap || { echo false; return; }
+    omv-confdbadm read conf.service.qnap < /dev/null 2> /dev/null | python3 -I -c '
+import json, sys
+try:
+    print("true" if json.load(sys.stdin).get("skiphwcheck") else "false")
+except ValueError:
+    print("false")' || echo false
+}
 
-settings=""
-for _ in $(seq 30); do
-    settings="$(rpc getHardwareSettings 2>/dev/null)" && break
-    settings=""
-    sleep 2
-done
-[ -n "$settings" ] || die "The OMV engine did not answer. Open System > QNAP > Drivers and click Set up drivers."
+# The hardware check: install and load the drivers. The driver reads the
+# chip ID and matches the model in the controller's product data; on any
+# other board it refuses to start and no qnap8528 hwmon device appears.
+drivers() {
+    local headers pkg was_running before after
+    read -r -a headers <<< "$(header_packages)"
 
-field() { python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get(sys.argv[2], ""))' "$settings" "$1"; }
+    ADDED_PACKAGES=()
+    for pkg in "${headers[@]}" "${DRIVERS[@]}"; do
+        installed "$pkg" || ADDED_PACKAGES+=("$pkg")
+    done
 
-if [ "$(field needssetup)" = True ]; then
-    say "Setting up the drivers. This can take a few minutes; the fans run at full speed for a moment."
-    job="$(rpc setupDrivers | python3 -c 'import json, sys; print(json.load(sys.stdin))')"
-    # Show the job's output as it runs and stop when it ends.
-    python3 - "$job" <<'EOF'
-import json, sys, time
+    was_running=false
+    hwmon_present qnap8528 && was_running=true
+    before="$(for pkg in "${DRIVERS[@]}"; do version "$pkg"; done)"
 
-status_file, shown = sys.argv[1], 0
-while True:
-    try:
-        with open(status_file) as f:
-            status = json.load(f)
-    except (OSError, ValueError):
-        time.sleep(1)
-        continue
-    output = status.get("outputfilename")
-    if output:
-        try:
-            with open(output, "rb") as f:
-                f.seek(shown)
-                chunk = f.read()
-            shown += len(chunk)
-            sys.stdout.write(chunk.decode("utf-8", "replace"))
-            sys.stdout.flush()
-        except OSError:
-            pass
-    if not status.get("running", True):
-        error = status.get("error")
-        if error:
-            message = error.get("message") if isinstance(error, dict) else error
-            print("\nDriver setup failed: %s" % message, file=sys.stderr)
-            sys.exit(1)
-        sys.exit(0)
-    time.sleep(2)
-EOF
-    settings="$(rpc getHardwareSettings)"
-else
-    say "The drivers are already set up."
-fi
+    say "Installing the files needed to build the drivers (kernel headers)"
+    apt_get --yes --no-install-recommends install "${headers[@]}" ||
+        apt_get --yes --no-install-recommends install "${headers[0]}" ||
+        warn "The kernel headers could not be installed; the drivers may not build."
 
-echo "Drivers: $(field driverstatus)"
+    say "Installing and building the drivers (this can take a few minutes)"
+    if ! apt_get --yes --no-install-recommends install "${DRIVERS[@]}"; then
+        rollback
+        die "The drivers did not install. Nothing was added to OpenMediaVault."
+    fi
+    if ! modinfo -k "$(uname -r)" qnap8528 > /dev/null 2>&1; then
+        rollback
+        die "The qnap8528 driver could not be built for the running kernel ($(uname -r)).
+Install the latest updates, restart the NAS and run this again. Nothing was
+added to OpenMediaVault."
+    fi
+    after="$(for pkg in "${DRIVERS[@]}"; do version "$pkg"; done)"
 
-say "Done"
-echo "Sign in to the OMV web interface, press Ctrl+Shift+R (Cmd+Shift+R on a Mac)"
-echo "to reload it, then open System > QNAP. Future updates appear in"
-echo "System > Update Management."
+    if $was_running && [ "$before" = "$after" ]; then
+        echo "The qnap8528 driver is already running and up to date."
+        return 0
+    fi
+
+    say "Checking that the driver supports this machine (the fans run at full speed for a moment)"
+    if $QNAPD_WAS_ACTIVE; then
+        systemctl stop qnapd
+    fi
+    modprobe -r qm2mod 2> /dev/null || true
+    modprobe -r qnap8528 2> /dev/null || true
+    if $SKIP_HW_CHECK; then
+        modprobe qnap8528 skip_hw_check=true || true
+    else
+        modprobe qnap8528 || true
+    fi
+
+    if ! hwmon_present qnap8528; then
+        rollback
+        if $was_running; then
+            die "The qnap8528 driver was running before this update but did not start again.
+Restart the NAS. If it still doesn't start, please report it: $ISSUES"
+        fi
+        if $SKIP_HW_CHECK; then
+            die "The qnap8528 driver does not recognise this machine, so it is not a
+supported QNAP model. Nothing was added to OpenMediaVault. If it is a QNAP,
+please report the model: $ISSUES"
+        fi
+        die "The qnap8528 driver did not find a supported QNAP board, so nothing was
+added to OpenMediaVault.
+
+Some QNAP models ($ENE_MODELS) have an ENE
+controller that fails the driver's chip check. Only on one of those, run:
+
+  wget -O - $SITE/install | bash -s -- --skip-hw-check"
+    fi
+    modprobe qm2mod 2> /dev/null || true
+    DRIVERS_RELOADED=true
+
+    local model
+    model="$(dmesg 2> /dev/null | grep -o 'device model is [A-Za-z0-9-]*' | tail -1 || true)"
+    echo "Supported: ${model:-the driver recognised this QNAP}."
+}
+
+plugin() {
+    say "Installing openmediavault-qnap (this restarts the OMV web interface)"
+    apt_get --yes -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+        install openmediavault-qnap ||
+        die "The plugin did not install. The drivers are in place; run this again."
+    dpkg -S "$SOURCES" > /dev/null 2>&1 || \
+        die "The plugin did not install its package repository."
+    echo "Installed openmediavault-qnap $(version openmediavault-qnap)."
+}
+
+# What Set up drivers does last: load the drivers at every start and
+# turn fan control on. Only changes what differs.
+settings() {
+    local qm2=false changed
+    hwmon_present qm2 && qm2=true
+    changed="$(omv-confdbadm read conf.service.qnap < /dev/null | python3 -I -c '
+import json, subprocess, sys
+config = json.load(sys.stdin)
+wanted = {"enable": True, "loadmodule": True, "loadqm2": sys.argv[1] == "true"}
+if sys.argv[2] == "true":
+    wanted["skiphwcheck"] = True
+if all(config.get(key) == value for key, value in wanted.items()):
+    print("false")
+    sys.exit(0)
+config.update(wanted)
+subprocess.run(["omv-confdbadm", "update", "conf.service.qnap",
+                json.dumps(config)], check=True, stdout=subprocess.DEVNULL)
+print("true")' "$qm2" "$SKIP_HW_CHECK")" ||
+        die "Could not save the settings. Open System > QNAP > Drivers and click Set up drivers."
+
+    if $changed || $DRIVERS_RELOADED; then
+        say "Loading the drivers at every start and turning on fan control"
+        omv-salt deploy run --no-color --quiet qnap < /dev/null > /dev/null ||
+            die "Could not apply the settings. Open System > QNAP > Drivers and click Set up drivers."
+    fi
+    start_qnapd_again
+}
+
+main() {
+    set -euo pipefail
+
+    SKIP_HW_CHECK=false
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --skip-hw-check) SKIP_HW_CHECK=true ;;
+            # Older instructions; the driver now makes the check.
+            -y|--yes) ;;
+            *) die "Unknown option: $arg" ;;
+        esac
+    done
+
+    checks
+    [ "$(configured_skip)" = true ] && SKIP_HW_CHECK=true
+
+    ADDED_REPO=false
+    DRIVERS_RELOADED=false
+    QNAPD_WAS_ACTIVE=false
+    systemctl is-active --quiet qnapd 2> /dev/null && QNAPD_WAS_ACTIVE=true
+    trap cleanup EXIT
+
+    add_repository
+    say "Updating the package lists"
+    apt_get update
+
+    drivers
+    plugin
+    settings
+
+    if command -v omv-rpc > /dev/null; then
+        local status
+        status="$(omv-rpc -u admin Qnap getHardwareSettings '{}' < /dev/null 2> /dev/null |
+            python3 -I -c 'import json, sys; print(json.load(sys.stdin).get("driverstatus", ""))' \
+            2> /dev/null || true)"
+        [ -n "$status" ] && echo "Drivers: $status"
+    fi
+
+    say "Done"
+    echo "Sign in to the OMV web interface, press Ctrl+Shift+R (Cmd+Shift+R on a Mac)"
+    echo "to reload it, then open System > QNAP. Future updates appear in"
+    echo "System > Update Management."
+}
+
+main "$@"
