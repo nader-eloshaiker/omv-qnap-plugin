@@ -20,6 +20,81 @@ plugins:
 relative_links:
   enabled: true
   collections: false
+# Who made the sites, for search engines (jekyll-seo-tag).
+author:
+  name: Nader Eloshaiker
+  url: https://github.com/nader-eloshaiker
+social:
+  name: Nader Eloshaiker
+  links:
+    - https://github.com/nader-eloshaiker
+    - https://medium.com/@nader.eloshaiker
+
+# Search titles and descriptions for visitor pages, kept here so the
+# Markdown files stay clean on GitHub. Developer pages are left out of the
+# sitemap and marked noindex: they don't help QNAP owners find the plugin.
+defaults:
+  - scope: {path: ""}
+    values: {image: /images/banner.png}
+  - scope: {path: googlef4b3a21d0a442387.html}
+    values: {sitemap: false}
+  - scope: {path: guide/qts-to-omv.md}
+    values:
+      description: >-
+        Step-by-step guide to replacing QNAP QTS with OpenMediaVault, then
+        getting quiet fans, LEDs, buttons and alerts back. No Linux skills
+        needed.
+  - scope: {path: hardware/models.md}
+    values:
+      title: QNAP models tested with OpenMediaVault
+      description: >-
+        QNAP NAS models tested with the openmediavault-qnap plugin, what was
+        checked on each, and how to report a test of your own model.
+  - scope: {path: disk-sleep.md}
+    values:
+      title: Why disks won't spin down in OpenMediaVault
+      description: >-
+        What keeps hard disks awake on an OpenMediaVault NAS, such as
+        S.M.A.R.T. checks and the drivetemp module, and how to find the culprit.
+  - scope: {path: testing/model-testing.md}
+    values:
+      title: Test the QNAP plugin on your model
+      description: >-
+        Own a QNAP other than the TS-253D? How to test openmediavault-qnap on
+        your model and send a report, so it can be listed as supported.
+  - scope: {path: hardware/ts-253d.md}
+    values:
+      title: QNAP TS-253D on OpenMediaVault, hardware reference
+      description: >-
+        The QNAP TS-253D with a QM2-2P-244A-A1 card under OpenMediaVault:
+        fans, sensors, LEDs, buttons and power settings, as measured.
+  - scope: {path: PLAN.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: ai-context.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: architecture.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: build-and-release.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: dependencies.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: omv-integration.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: hardware/fan-control.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: hardware/leds.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: hardware/ts-877.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: reference}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: testing/hardware-testing.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: testing/ui-validation.md}
+    values: {sitemap: false, noindex: true}
+  - scope: {path: README.md}
+    values: {sitemap: false, noindex: true}
+
 github:
   is_project_page: true
   repository_url: https://github.com/nader-eloshaiker/omv-qnap-plugin

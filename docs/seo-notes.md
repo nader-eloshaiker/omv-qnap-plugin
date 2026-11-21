@@ -42,3 +42,18 @@ text:
 Forum threads where people ask these (TrueNAS community "QNAP fans at
 100%", the TrueNAS feature request for qnap8528, the OMV forum QNAP fan
 thread) are good places for a short reply linking the site.
+
+## On-page setup
+
+- Search titles and descriptions for pages whose Markdown has no front
+  matter are set under `defaults` in `_config.yml`, so the files read
+  cleanly on GitHub.
+- Developer pages are marked `noindex` and left out of the sitemap
+  (`sitemap: false, noindex: true` in `defaults`); only pages for QNAP
+  owners are offered to search engines.
+- Every page shares `images/banner.png` as its link preview image.
+- The home page adds SoftwareApplication structured data
+  (`_includes/software-jsonld.html`): free, GPL-3.0, OpenMediaVault 8.
+- Visitor counts: GoatCounter (cookie-free, no consent banner), switched on
+  by `goatcounter:` in `_config.yml`.
+- The two plugin sites link to each other where it helps a reader.

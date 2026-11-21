@@ -15,6 +15,11 @@ Not only reads and writes count: any S.M.A.R.T. query to an awake drive,
 even `smartctl -n standby`, restarts its standby timer **[measured]**. So
 a disk only sleeps if nothing touches it for the whole spindown time.
 
+Some drives ignore their spindown time even when nothing touches them
+(seen with WD Red drives). For those, the separate
+[openmediavault-spindown](https://nader-eloshaiker.github.io/omv-spindown-plugin/)
+plugin watches disk activity and puts idle disks to sleep itself.
+
 ## What the plugin does
 
 qnapd never wakes a sleeping disk and, since 8.0.1, does not keep an
