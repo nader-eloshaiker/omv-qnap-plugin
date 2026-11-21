@@ -12,7 +12,7 @@ image: /images/banner.png
 theme: jekyll-theme-cayman
 # GoatCounter site code (https://<code>.goatcounter.com), a cookie-free
 # visitor counter; leave empty to turn it off.
-goatcounter: nader-eloshaiker
+goatcounter: omv-qnap-plugin
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
