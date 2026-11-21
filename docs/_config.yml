@@ -10,8 +10,9 @@ lang: en
 # Preview image for links shared on social sites and chat apps.
 image: /images/banner.png
 theme: jekyll-theme-cayman
-# Google Analytics 4 measurement ID (G-...); leave empty to turn it off.
-google_analytics: G-E9FYHJ4G24
+# GoatCounter site code (https://<code>.goatcounter.com), a cookie-free
+# visitor counter; leave empty to turn it off.
+goatcounter:
 plugins:
   - jekyll-seo-tag
   - jekyll-sitemap
