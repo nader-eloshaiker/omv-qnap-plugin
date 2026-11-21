@@ -3,3 +3,22 @@
 <link rel="icon" type="image/png" sizes="32x32" href="{{ '/favicon-32.png' | relative_url }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ '/apple-touch-icon.png' | relative_url }}">
 <meta name="theme-color" content="#173b63">
+
+<!-- Google Analytics 4: set google_analytics (G-...) in _config.yml. The
+     theme's own analytics include uses the retired analytics.js, and this
+     file replaces it. -->
+{% if site.google_analytics %}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', '{{ site.google_analytics }}');
+</script>
+{% endif %}
+
+<!-- GoatCounter (no cookies, no personal data): set goatcounter to the
+     site code (the CODE in CODE.goatcounter.com) in _config.yml. -->
+{% if site.goatcounter %}
+<script data-goatcounter="https://{{ site.goatcounter }}.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+{% endif %}

@@ -24,3 +24,7 @@ github:
 # so links from README.md keep working.
 exclude:
   - seo-notes.md
+# Visitor counts: GoatCounter (no cookies), dashboard at
+# https://omv-qnap-plugin.goatcounter.com. google_analytics (G-...) is
+# supported by _includes/head-custom.html but not set.
+goatcounter: omv-qnap-plugin
