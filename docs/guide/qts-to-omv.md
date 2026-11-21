@@ -479,7 +479,10 @@ is complete first.
 
 **Let the disks sleep:** to have idle disks spin down, set a spindown
 time in **Storage > Disks** (select a disk, edit). Some settings and
-tools keep disks awake; see [Letting disks sleep](../disk-sleep.md).
+tools keep disks awake; see [Letting disks sleep](../disk-sleep.md). If a
+disk still never sleeps, the separate
+[openmediavault-spindown](https://nader-eloshaiker.github.io/omv-spindown-plugin/)
+plugin puts it to sleep after its spindown time.
 
 ---
 

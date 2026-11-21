@@ -1,0 +1,19 @@
+<!-- Tells search engines the home page is about free software for OMV 8. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": {{ site.title | jsonify }},
+  "description": {{ page.description | default: site.description | strip | jsonify }},
+  "url": {{ "/" | absolute_url | jsonify }},
+  "image": {{ site.image | absolute_url | jsonify }},
+  "applicationCategory": "UtilitiesApplication",
+  "applicationSubCategory": "OpenMediaVault plugin",
+  "operatingSystem": "OpenMediaVault 8 (Debian Linux)",
+  "downloadUrl": {{ site.github.repository_url | append: "/releases/latest" | jsonify }},
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "isAccessibleForFree": true,
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "author": {"@type": "Person", "name": {{ site.author.name | jsonify }}, "url": {{ site.author.url | jsonify }}}
+}
+</script>
